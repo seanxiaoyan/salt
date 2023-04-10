@@ -288,47 +288,35 @@ in which each job's information is keyed by salt's ``jid``.
 Setup
 =====
 """
-
 import logging
-
 import salt.ext.tornado.gen
 import salt.ext.tornado.websocket
 import salt.netapi
 import salt.utils.json
-
 from . import event_processor
 from .saltnado import _check_cors_origin
-
+log = logging.getLogger(__name__)
 _json = salt.utils.json.import_json()
 
-
-log = logging.getLogger(__name__)
-
-
-class AllEventsHandler(
-    salt.ext.tornado.websocket.WebSocketHandler
-):  # pylint: disable=W0223,W0232
+class AllEventsHandler(salt.ext.tornado.websocket.WebSocketHandler):
     """
     Server side websocket handler.
     """
 
-    # pylint: disable=W0221
     def get(self, token):
         """
         Check the token, returns a 401 if the token is invalid.
         Else open the websocket connection
         """
-        log.debug("In the websocket get method")
-
+        log.debug('In the websocket get method')
         self.token = token
-        # close the connection, if not authenticated
         if not self.application.auth.get_tok(token):
-            log.debug("Refusing websocket connection, bad token!")
+            log.debug('Refusing websocket connection, bad token!')
             self.send_error(401)
             return
         super().get(token)
 
-    def open(self, token):  # pylint: disable=W0221
+    def open(self, token):
         """
         Return a websocket connection to Salt
         representing Salt's "real time" event stream.
@@ -343,50 +331,41 @@ class AllEventsHandler(
         These messages make up salt's
         "real time" event stream.
         """
-        log.debug("Got websocket message %s", message)
-        if message == "websocket client ready":
+        log.debug('Got websocket message %s', message)
+        if message == 'websocket client ready':
             if self.connected:
-                # TBD: Add ability to run commands in this branch
-                log.debug("Websocket already connected, returning")
+                log.debug('Websocket already connected, returning')
                 return
-
             self.connected = True
-
             while True:
                 try:
-                    event = yield self.application.event_listener.get_event(self)
+                    log.info('Trace')
+                    event = (yield self.application.event_listener.get_event(self))
                     self.write_message(salt.utils.json.dumps(event, _json_module=_json))
-                except Exception as err:  # pylint: disable=broad-except
-                    log.info(
-                        "Error! Ending server side websocket connection. Reason = %s",
-                        err,
-                    )
+                except Exception as err:
+                    log.info('Error! Ending server side websocket connection. Reason = %s', err)
                     break
-
             self.close()
         else:
-            # TBD: Add logic to run salt commands here
             pass
 
     def on_close(self, *args, **kwargs):
         """Cleanup."""
-        log.debug("In the websocket close method")
+        log.debug('In the websocket close method')
         self.close()
 
     def check_origin(self, origin):
         """
         If cors is enabled, check that the origin is allowed
         """
-
         mod_opts = self.application.mod_opts
-
-        if mod_opts.get("cors_origin"):
-            return bool(_check_cors_origin(origin, mod_opts["cors_origin"]))
+        if mod_opts.get('cors_origin'):
+            return bool(_check_cors_origin(origin, mod_opts['cors_origin']))
         else:
             return super().check_origin(origin)
 
+class FormattedEventsHandler(AllEventsHandler):
 
-class FormattedEventsHandler(AllEventsHandler):  # pylint: disable=W0223,W0232
     @salt.ext.tornado.gen.coroutine
     def on_message(self, message):
         """Listens for a "websocket client ready" message.
@@ -395,40 +374,23 @@ class FormattedEventsHandler(AllEventsHandler):  # pylint: disable=W0223,W0232
         These messages make up salt's
         "real time" event stream.
         """
-        log.debug("Got websocket message %s", message)
-        if message == "websocket client ready":
+        log.debug('Got websocket message %s', message)
+        if message == 'websocket client ready':
             if self.connected:
-                # TBD: Add ability to run commands in this branch
-                log.debug("Websocket already connected, returning")
+                log.debug('Websocket already connected, returning')
                 return
-
             self.connected = True
-
             evt_processor = event_processor.SaltInfo(self)
             client = salt.netapi.NetapiClient(self.application.opts)
-            client.run(
-                {
-                    "fun": "grains.items",
-                    "tgt": "*",
-                    "token": self.token,
-                    "mode": "client",
-                    "asynchronous": "local_async",
-                    "client": "local",
-                }
-            )
+            client.run({'fun': 'grains.items', 'tgt': '*', 'token': self.token, 'mode': 'client', 'asynchronous': 'local_async', 'client': 'local'})
             while True:
                 try:
-                    event = yield self.application.event_listener.get_event(self)
+                    log.info('Trace')
+                    event = (yield self.application.event_listener.get_event(self))
                     evt_processor.process(event, self.token, self.application.opts)
-                    # self.write_message('data: {0}\n\n'.format(salt.utils.json.dumps(event, _json_module=_json)))
-                except Exception as err:  # pylint: disable=broad-except
-                    log.debug(
-                        "Error! Ending server side websocket connection. Reason = %s",
-                        err,
-                    )
+                except Exception as err:
+                    log.debug('Error! Ending server side websocket connection. Reason = %s', err)
                     break
-
             self.close()
         else:
-            # TBD: Add logic to run salt commands here
             pass

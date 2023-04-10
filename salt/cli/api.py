@@ -5,17 +5,12 @@
     Salt's api cli parser.
 
 """
-
-
 import logging
-
 import salt.client.netapi
 import salt.utils.files
 import salt.utils.parsers as parsers
 from salt.utils.verify import check_user
-
 log = logging.getLogger(__name__)
-
 
 class SaltAPI(parsers.SaltAPIParser):
     """
@@ -31,7 +26,7 @@ class SaltAPI(parsers.SaltAPIParser):
             super(YourSubClass, self).prepare()
         """
         super().prepare()
-        log.info("Setting up the Salt API")
+        log.info('Setting up the Salt API')
         self.api = salt.client.netapi.NetapiClient(self.config)
         self.daemonize_if_required()
         self.set_pidfile()
@@ -47,23 +42,24 @@ class SaltAPI(parsers.SaltAPIParser):
         NOTE: Run any required code before calling `super()`.
         """
         super().start()
-        if check_user(self.config["user"]):
-            log.info("The salt-api is starting up")
+        if check_user(self.config['user']):
+            log.info('The salt-api is starting up')
             self.api.run()
 
     def shutdown(self, exitcode=0, exitmsg=None):
         """
         If sub-classed, run any shutdown operations on this method.
         """
-        log.info("The salt-api is shutting down..")
-        msg = "The salt-api is shutdown. "
+        log.info('The salt-api is shutting down..')
+        msg = 'The salt-api is shutdown. '
         if exitmsg is not None:
+            log.info('Trace')
             exitmsg = msg + exitmsg
         else:
+            log.info('Trace')
             exitmsg = msg.strip()
         super().shutdown(exitcode, exitmsg)
 
     def _handle_signals(self, signum, sigframe):
-        # escalate signal to the process manager processes
         self.api.process_manager._handle_signals(signum, sigframe)
         super()._handle_signals(signum, sigframe)

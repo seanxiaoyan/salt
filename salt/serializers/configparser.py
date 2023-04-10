@@ -6,16 +6,13 @@
 
     Implements a configparser serializer.
 """
-
 import configparser
 import io
-
 from salt.serializers import DeserializationError, SerializationError
-
-__all__ = ["deserialize", "serialize", "available"]
-
+import logging
+log = logging.getLogger(__name__)
+__all__ = ['deserialize', 'serialize', 'available']
 available = True
-
 
 def deserialize(stream_or_string, **options):
     """
@@ -24,10 +21,9 @@ def deserialize(stream_or_string, **options):
     :param stream_or_string: stream or string to deserialize.
     :param options: options given to lower configparser module.
     """
-
     cp = configparser.ConfigParser(**options)
-
     try:
+        log.info('Trace')
         if not isinstance(stream_or_string, (bytes, str)):
             cp.read_file(stream_or_string)
         else:
@@ -35,13 +31,13 @@ def deserialize(stream_or_string, **options):
         data = {}
         for section_name in cp.sections():
             section = {}
-            for k, v in cp.items(section_name):
+            for (k, v) in cp.items(section_name):
                 section[k] = v
             data[section_name] = section
         return data
-    except Exception as error:  # pylint: disable=broad-except
+    except Exception as error:
+        log.info('Trace')
         raise DeserializationError(error)
-
 
 def serialize(obj, **options):
     """
@@ -50,40 +46,34 @@ def serialize(obj, **options):
     :param obj: the data structure to serialize
     :param options: options given to lower configparser module.
     """
-
     try:
+        log.info('Trace')
         if not isinstance(obj, dict):
-            raise TypeError(
-                "configparser can only serialize dictionaries, not {}".format(type(obj))
-            )
-        fp = options.pop("fp", None)
+            raise TypeError('configparser can only serialize dictionaries, not {}'.format(type(obj)))
+        fp = options.pop('fp', None)
         cp = configparser.ConfigParser(**options)
         _read_dict(cp, obj)
-
         if fp:
             return cp.write(fp)
         else:
             s = io.StringIO()
             cp.write(s)
             return s.getvalue()
-    except Exception as error:  # pylint: disable=broad-except
+    except Exception as error:
+        log.info('Trace')
         raise SerializationError(error)
-
 
 def _is_defaultsect(section_name):
     return section_name == configparser.DEFAULTSECT
 
-
 def _read_dict(cp, dictionary):
-    """
-    Cribbed from python3's ConfigParser.read_dict function.
-    """
-    for section, keys in dictionary.items():
+    log.info('Trace')
+    "\n    Cribbed from python3's ConfigParser.read_dict function.\n    "
+    for (section, keys) in dictionary.items():
         section = str(section)
         if not _is_defaultsect(section):
             cp.add_section(section)
-
-        for key, value in keys.items():
+        for (key, value) in keys.items():
             key = cp.optionxform(str(key))
             if value is not None:
                 value = str(value)

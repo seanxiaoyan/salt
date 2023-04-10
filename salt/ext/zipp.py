@@ -1,30 +1,3 @@
-# This is https://raw.githubusercontent.com/jaraco/zipp/v3.5.0/zipp.py
-#
-# Copyright Jason R. Coombs
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to
-# deal in the Software without restriction, including without limitation the
-# rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-# sell copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-# IN THE SOFTWARE.
-
-# THIS CODE SHOULD BE REMOVED WITH importlib-metadata >= 3.3.0 IS AVAILABLE
-# AS A SYSTEM PACKAGE ON ALL THE PLATFORMS FOR WHICH SALT BUILDS PACKAGES OR
-# WHEN THE MINIMUM PYTHON VERSION IS 3.10
-
-# pylint: skip-file
 import io
 import posixpath
 import zipfile
@@ -32,12 +5,12 @@ import itertools
 import contextlib
 import sys
 import pathlib
-
+import logging
+log = logging.getLogger(__name__)
 if sys.version_info < (3, 7):
     from collections import OrderedDict
 else:
     OrderedDict = dict
-
 
 def _parents(path):
     """
@@ -56,7 +29,6 @@ def _parents(path):
     []
     """
     return itertools.islice(_ancestry(path), 1, None)
-
 
 def _ancestry(path):
     """
@@ -77,12 +49,9 @@ def _ancestry(path):
     path = path.rstrip(posixpath.sep)
     while path and path != posixpath.sep:
         yield path
-        path, tail = posixpath.split(path)
-
-
+        (path, tail) = posixpath.split(path)
 _dedupe = OrderedDict.fromkeys
-"""Deduplicate an iterable in original order"""
-
+'Deduplicate an iterable in original order'
 
 def _difference(minuend, subtrahend):
     """
@@ -90,7 +59,6 @@ def _difference(minuend, subtrahend):
     with O(1) lookup.
     """
     return itertools.filterfalse(set(subtrahend).__contains__, minuend)
-
 
 class CompleteDirs(zipfile.ZipFile):
     """
@@ -129,17 +97,12 @@ class CompleteDirs(zipfile.ZipFile):
         """
         if isinstance(source, CompleteDirs):
             return source
-
         if not isinstance(source, zipfile.ZipFile):
             return cls(_pathlib_compat(source))
-
-        # Only allow for FastLookup when supplied zipfile is read-only
         if 'r' not in source.mode:
             cls = CompleteDirs
-
         source.__class__ = cls
         return source
-
 
 class FastLookup(CompleteDirs):
     """
@@ -159,17 +122,17 @@ class FastLookup(CompleteDirs):
         self.__lookup = super()._name_set()
         return self.__lookup
 
-
 def _pathlib_compat(path):
     """
     For path-like objects, convert to a filename for compatibility
     on Python 3.6.1 and earlier.
     """
     try:
+        log.info('Trace')
         return path.__fspath__()
     except AttributeError:
+        log.info('Trace')
         return str(path)
-
 
 class Path:
     """
@@ -178,11 +141,11 @@ class Path:
     Consider a zip file with this structure::
 
         .
-        ├── a.txt
-        └── b
-            ├── c.txt
-            └── d
-                └── e.txt
+        \u251c\u2500\u2500 a.txt
+        \u2514\u2500\u2500 b
+            \u251c\u2500\u2500 c.txt
+            \u2514\u2500\u2500 d
+                \u2514\u2500\u2500 e.txt
 
     >>> data = io.BytesIO()
     >>> zf = zipfile.ZipFile(data, 'w')
@@ -248,10 +211,9 @@ class Path:
     >>> str(root.parent)
     'mem'
     """
+    __repr = '{self.__class__.__name__}({self.root.filename!r}, {self.at!r})'
 
-    __repr = "{self.__class__.__name__}({self.root.filename!r}, {self.at!r})"
-
-    def __init__(self, root, at=""):
+    def __init__(self, root, at=''):
         """
         Construct a Path from a ZipFile or filename.
 
@@ -278,7 +240,7 @@ class Path:
         stream = self.root.open(self.at, zip_mode, pwd=pwd)
         if 'b' in mode:
             if args or kwargs:
-                raise ValueError("encoding args invalid for binary operation")
+                raise ValueError('encoding args invalid for binary operation')
             return stream
         return io.TextIOWrapper(stream, *args, **kwargs)
 
@@ -311,16 +273,16 @@ class Path:
             return strm.read()
 
     def _is_child(self, path):
-        return posixpath.dirname(path.at.rstrip("/")) == self.at.rstrip("/")
+        return posixpath.dirname(path.at.rstrip('/')) == self.at.rstrip('/')
 
     def _next(self, at):
         return self.__class__(self.root, at)
 
     def is_dir(self):
-        return not self.at or self.at.endswith("/")
+        return not self.at or self.at.endswith('/')
 
     def is_file(self):
-        return self.exists() and not self.is_dir()
+        return self.exists() and (not self.is_dir())
 
     def exists(self):
         return self.at in self.root._name_set()
@@ -340,7 +302,6 @@ class Path:
     def joinpath(self, *other):
         next = posixpath.join(self.at, *map(_pathlib_compat, other))
         return self._next(self.root.resolve_dir(next))
-
     __truediv__ = joinpath
 
     @property

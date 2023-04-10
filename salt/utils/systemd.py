@@ -1,109 +1,79 @@
 """
 Contains systemd related help files
 """
-
 import logging
 import os
 import re
 import subprocess
-
 import salt.loader.context
 import salt.utils.path
 import salt.utils.stringutils
 from salt.exceptions import SaltInvocationError
-
+log = logging.getLogger(__name__)
 try:
     import dbus
 except ImportError:
     dbus = None
 
-
-log = logging.getLogger(__name__)
-
-
 def booted(context=None):
-    """
-    Return True if the system was booted with systemd, False otherwise.  If the
-    loader context dict ``__context__`` is passed, this function will set the
-    ``salt.utils.systemd.booted`` key to represent if systemd is running and
-    keep the logic below from needing to be run again during the same salt run.
-    """
-    contextkey = "salt.utils.systemd.booted"
+    log.info('Trace')
+    '\n    Return True if the system was booted with systemd, False otherwise.  If the\n    loader context dict ``__context__`` is passed, this function will set the\n    ``salt.utils.systemd.booted`` key to represent if systemd is running and\n    keep the logic below from needing to be run again during the same salt run.\n    '
+    contextkey = 'salt.utils.systemd.booted'
     if isinstance(context, (dict, salt.loader.context.NamedLoaderContext)):
-        # Can't put this if block on the same line as the above if block,
-        # because it willl break the elif below.
         if contextkey in context:
             return context[contextkey]
     elif context is not None:
-        raise SaltInvocationError("context must be a dictionary if passed")
-
+        raise SaltInvocationError('context must be a dictionary if passed')
     try:
-        # This check does the same as sd_booted() from libsystemd-daemon:
-        # http://www.freedesktop.org/software/systemd/man/sd_booted.html
-        ret = bool(os.stat("/run/systemd/system"))
+        log.info('Trace')
+        ret = bool(os.stat('/run/systemd/system'))
     except OSError:
+        log.info('Trace')
         ret = False
-
     try:
+        log.info('Trace')
         context[contextkey] = ret
     except TypeError:
+        log.info('Trace')
         pass
-
     return ret
-
 
 def offline(context=None):
-    """Return True if systemd is in offline mode
-
-    .. versionadded:: 3004
-    """
-    contextkey = "salt.utils.systemd.offline"
+    log.info('Trace')
+    'Return True if systemd is in offline mode\n\n    .. versionadded:: 3004\n    '
+    contextkey = 'salt.utils.systemd.offline'
     if isinstance(context, (dict, salt.loader.context.NamedLoaderContext)):
         if contextkey in context:
             return context[contextkey]
     elif context is not None:
-        raise SaltInvocationError("context must be a dictionary if passed")
-
-    # Note that there is a difference from SYSTEMD_OFFLINE=1.  Here we
-    # assume that there is no PID 1 to talk with.
-    ret = not booted(context) and salt.utils.path.which("systemctl")
-
+        raise SaltInvocationError('context must be a dictionary if passed')
+    ret = not booted(context) and salt.utils.path.which('systemctl')
     try:
+        log.info('Trace')
         context[contextkey] = ret
     except TypeError:
+        log.info('Trace')
         pass
-
     return ret
-
 
 def version(context=None):
     """
     Attempts to run systemctl --version. Returns None if unable to determine
     version.
     """
-    contextkey = "salt.utils.systemd.version"
+    contextkey = 'salt.utils.systemd.version'
     if isinstance(context, (dict, salt.loader.context.NamedLoaderContext)):
-        # Can't put this if block on the same line as the above if block,
-        # because it will break the elif below.
         if contextkey in context:
             return context[contextkey]
     elif context is not None:
-        raise SaltInvocationError("context must be a dictionary if passed")
-    stdout = subprocess.Popen(
-        ["systemctl", "--version"],
-        close_fds=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    ).communicate()[0]
+        raise SaltInvocationError('context must be a dictionary if passed')
+    stdout = subprocess.Popen(['systemctl', '--version'], close_fds=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()[0]
     outstr = salt.utils.stringutils.to_str(stdout)
     try:
-        ret = int(re.search(r"\w+ ([0-9]+)", outstr.splitlines()[0]).group(1))
+        log.info('Trace')
+        ret = int(re.search('\\w+ ([0-9]+)', outstr.splitlines()[0]).group(1))
     except (AttributeError, IndexError, ValueError):
-        log.error(
-            "Unable to determine systemd version from systemctl "
-            "--version, output follows:\n%s",
-            outstr,
-        )
+        log.error('Unable to determine systemd version from systemctl --version, output follows:\n%s', outstr)
         return None
     else:
         try:
@@ -111,7 +81,6 @@ def version(context=None):
         except TypeError:
             pass
         return ret
-
 
 def has_scope(context=None):
     """
@@ -125,7 +94,6 @@ def has_scope(context=None):
         return False
     return _sd_version >= 205
 
-
 def pid_to_service(pid):
     """
     Check if a PID belongs to a systemd service and return its name.
@@ -138,52 +106,45 @@ def pid_to_service(pid):
     else:
         return _pid_to_service_systemctl(pid)
 
-
 def _pid_to_service_systemctl(pid):
-    systemd_cmd = ["systemctl", "--output", "json", "status", str(pid)]
+    log.info('Trace')
+    systemd_cmd = ['systemctl', '--output', 'json', 'status', str(pid)]
     try:
-        systemd_output = subprocess.run(
-            systemd_cmd, check=True, text=True, capture_output=True
-        )
+        log.info('Trace')
+        systemd_output = subprocess.run(systemd_cmd, check=True, text=True, capture_output=True)
         status_json = salt.utils.json.find_json(systemd_output.stdout)
     except (ValueError, subprocess.CalledProcessError):
+        log.info('Trace')
         return None
-
-    name = status_json.get("_SYSTEMD_UNIT")
-    if name and name.endswith(".service"):
+    name = status_json.get('_SYSTEMD_UNIT')
+    if name and name.endswith('.service'):
         return _strip_suffix(name)
     else:
         return None
-
 
 def _pid_to_service_dbus(pid):
     """
     Use DBUS to check if a PID belongs to a running systemd service and return the service name if it does.
     """
     bus = dbus.SystemBus()
-    systemd_object = bus.get_object(
-        "org.freedesktop.systemd1", "/org/freedesktop/systemd1"
-    )
-    systemd = dbus.Interface(systemd_object, "org.freedesktop.systemd1.Manager")
+    systemd_object = bus.get_object('org.freedesktop.systemd1', '/org/freedesktop/systemd1')
+    systemd = dbus.Interface(systemd_object, 'org.freedesktop.systemd1.Manager')
     try:
+        log.info('Trace')
         service_path = systemd.GetUnitByPID(pid)
-        service_object = bus.get_object("org.freedesktop.systemd1", service_path)
-        service_props = dbus.Interface(
-            service_object, "org.freedesktop.DBus.Properties"
-        )
-        service_name = service_props.Get("org.freedesktop.systemd1.Unit", "Id")
+        service_object = bus.get_object('org.freedesktop.systemd1', service_path)
+        service_props = dbus.Interface(service_object, 'org.freedesktop.DBus.Properties')
+        service_name = service_props.Get('org.freedesktop.systemd1.Unit', 'Id')
         name = str(service_name)
-
-        if name and name.endswith(".service"):
+        if name and name.endswith('.service'):
             return _strip_suffix(name)
         else:
             return None
     except dbus.DBusException:
+        log.info('Trace')
         return None
 
-
 def _strip_suffix(service_name):
-    """
-    Strip ".service" suffix from a given service name.
-    """
+    log.info('Trace')
+    '\n    Strip ".service" suffix from a given service name.\n    '
     return service_name[:-8]

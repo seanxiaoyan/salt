@@ -6,63 +6,41 @@ Helpers for the NAPALM modules.
 
 .. versionadded:: 2017.7.0
 """
-
 import logging
-
 import salt.utils.napalm
 from salt.exceptions import CommandExecutionError
 from salt.utils.decorators import depends
 from salt.utils.napalm import proxy_napalm_wrap
-
+import logging
+log = logging.getLogger(__name__)
 try:
     from netmiko import BaseConnection
-
     HAS_NETMIKO = True
 except ImportError:
     HAS_NETMIKO = False
-
 try:
-    import napalm.base.netmiko_helpers  # pylint: disable=no-name-in-module
-
+    import napalm.base.netmiko_helpers
     HAS_NETMIKO_HELPERS = True
 except ImportError:
     HAS_NETMIKO_HELPERS = False
-
 try:
-    import jxmlease  # pylint: disable=unused-import
-
+    import jxmlease
     HAS_JXMLEASE = True
 except ImportError:
     HAS_JXMLEASE = False
-
 try:
-    import ciscoconfparse  # pylint: disable=unused-import
-
+    import ciscoconfparse
     HAS_CISCOCONFPARSE = True
 except ImportError:
     HAS_CISCOCONFPARSE = False
-
 try:
-    import scp  # pylint: disable=unused-import
-
+    import scp
     HAS_SCP = True
 except ImportError:
     HAS_SCP = False
-
-# ----------------------------------------------------------------------------------------------------------------------
-# module properties
-# ----------------------------------------------------------------------------------------------------------------------
-
-__virtualname__ = "napalm"
-__proxyenabled__ = ["*"]
-# uses NAPALM-based proxy to interact with network devices
-
+__virtualname__ = 'napalm'
+__proxyenabled__ = ['*']
 log = logging.getLogger(__file__)
-
-# ----------------------------------------------------------------------------------------------------------------------
-# property functions
-# ----------------------------------------------------------------------------------------------------------------------
-
 
 def __virtual__():
     """
@@ -70,53 +48,28 @@ def __virtual__():
     """
     return salt.utils.napalm.virtual(__opts__, __virtualname__, __file__)
 
-
-# ----------------------------------------------------------------------------------------------------------------------
-# helper functions -- will not be exported
-# ----------------------------------------------------------------------------------------------------------------------
-
-
 def _get_netmiko_args(optional_args):
-    """
-    Check for Netmiko arguments that were passed in as NAPALM optional arguments.
-
-    Return a dictionary of these optional args that will be passed into the
-    Netmiko ConnectHandler call.
-
-    .. note::
-
-        This is a port of the NAPALM helper for backwards compatibility with
-        older versions of NAPALM, and stability across Salt features.
-        If the netmiko helpers module is available however, it will prefer that
-        implementation nevertheless.
-    """
+    log.info('Trace')
+    '\n    Check for Netmiko arguments that were passed in as NAPALM optional arguments.\n\n    Return a dictionary of these optional args that will be passed into the\n    Netmiko ConnectHandler call.\n\n    .. note::\n\n        This is a port of the NAPALM helper for backwards compatibility with\n        older versions of NAPALM, and stability across Salt features.\n        If the netmiko helpers module is available however, it will prefer that\n        implementation nevertheless.\n    '
     if HAS_NETMIKO_HELPERS:
         return napalm.base.netmiko_helpers.netmiko_args(optional_args)
-    # Older version don't have the netmiko_helpers module, the following code is
-    # simply a port from the NAPALM code base, for backwards compatibility:
-    # https://github.com/napalm-automation/napalm/blob/develop/napalm/base/netmiko_helpers.py
-    netmiko_args, _, _, netmiko_defaults = __utils__["args.get_function_argspec"](
-        BaseConnection.__init__
-    )
+    (netmiko_args, _, _, netmiko_defaults) = __utils__['args.get_function_argspec'](BaseConnection.__init__)
     check_self = netmiko_args.pop(0)
-    if check_self != "self":
-        raise ValueError("Error processing Netmiko arguments")
+    if check_self != 'self':
+        raise ValueError('Error processing Netmiko arguments')
     netmiko_argument_map = dict(zip(netmiko_args, netmiko_defaults))
-    # Netmiko arguments that are integrated into NAPALM already
-    netmiko_filter = ["ip", "host", "username", "password", "device_type", "timeout"]
-    # Filter out all of the arguments that are integrated into NAPALM
+    netmiko_filter = ['ip', 'host', 'username', 'password', 'device_type', 'timeout']
     for k in netmiko_filter:
         netmiko_argument_map.pop(k)
-    # Check if any of these arguments were passed in as NAPALM optional_args
     netmiko_optional_args = {}
-    for k, v in netmiko_argument_map.items():
+    for (k, v) in netmiko_argument_map.items():
         try:
+            log.info('Trace')
             netmiko_optional_args[k] = optional_args[k]
         except KeyError:
+            log.info('Trace')
             pass
-    # Return these arguments for use with establishing Netmiko SSH connection
     return netmiko_optional_args
-
 
 def _inject_junos_proxy(napalm_device):
     """
@@ -125,41 +78,19 @@ def _inject_junos_proxy(napalm_device):
     """
 
     def _ret_device():
-        return napalm_device["DRIVER"].device
-
-    __proxy__["junos.conn"] = _ret_device
-    # Injecting the junos.conn key into the __proxy__ object, we can then
-    # access the features that already exist into the junos module, as long
-    # as the rest of the dependencies are installed (jxmlease).
-    # junos-eznc is already installed, as part of NAPALM, and the napalm
-    # driver for junos already makes use of the Device class from this lib.
-    # So pointing the __proxy__ object to this object already loaded into
-    # memory, we can go and re-use the features from the existing junos
-    # Salt module.
-
+        return napalm_device['DRIVER'].device
+    __proxy__['junos.conn'] = _ret_device
 
 def _junos_prep_fun(napalm_device):
     """
     Prepare the Junos function.
     """
-    if __grains__["os"] != "junos":
-        return {
-            "out": None,
-            "result": False,
-            "comment": "This function is only available on Junos",
-        }
+    if __grains__['os'] != 'junos':
+        return {'out': None, 'result': False, 'comment': 'This function is only available on Junos'}
     if not HAS_JXMLEASE:
-        return {
-            "out": None,
-            "result": False,
-            "comment": (
-                "Please install jxmlease (``pip install jxmlease``) to be able to use"
-                " this function."
-            ),
-        }
+        return {'out': None, 'result': False, 'comment': 'Please install jxmlease (``pip install jxmlease``) to be able to use this function.'}
     _inject_junos_proxy(napalm_device)
-    return {"result": True}
-
+    return {'result': True}
 
 @proxy_napalm_wrap
 def _netmiko_conn(**kwargs):
@@ -184,8 +115,7 @@ def _netmiko_conn(**kwargs):
     """
     netmiko_kwargs = netmiko_args()
     kwargs.update(netmiko_kwargs)
-    return __salt__["netmiko.get_connection"](**kwargs)
-
+    return __salt__['netmiko.get_connection'](**kwargs)
 
 @proxy_napalm_wrap
 def _pyeapi_conn(**kwargs):
@@ -209,16 +139,10 @@ def _pyeapi_conn(**kwargs):
         res2 = conn.get_config(as_string=True)
     """
     pyeapi_kwargs = pyeapi_nxos_api_args(**kwargs)
-    return __salt__["pyeapi.get_connection"](**pyeapi_kwargs)
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# callable functions
-# ----------------------------------------------------------------------------------------------------------------------
-
+    return __salt__['pyeapi.get_connection'](**pyeapi_kwargs)
 
 @proxy_napalm_wrap
-def alive(**kwargs):  # pylint: disable=unused-argument
+def alive(**kwargs):
     """
     Returns the alive status of the connection layer.
     The output is a dictionary under the usual dictionary
@@ -239,13 +163,10 @@ def alive(**kwargs):  # pylint: disable=unused-argument
             is_alive: False
         comment: ''
     """
-    return salt.utils.napalm.call(
-        napalm_device, "is_alive", **{}  # pylint: disable=undefined-variable
-    )
-
+    return salt.utils.napalm.call(napalm_device, 'is_alive', **{})
 
 @proxy_napalm_wrap
-def reconnect(force=False, **kwargs):  # pylint: disable=unused-argument
+def reconnect(force=False, **kwargs):
     """
     Reconnect the NAPALM proxy when the connection
     is dropped by the network device.
@@ -263,36 +184,21 @@ def reconnect(force=False, **kwargs):  # pylint: disable=unused-argument
         salt '*' napalm.reconnect
         salt '*' napalm.reconnect force=True
     """
-    default_ret = {"out": None, "result": True, "comment": "Already alive."}
+    default_ret = {'out': None, 'result': True, 'comment': 'Already alive.'}
     if not salt.utils.napalm.is_proxy(__opts__):
-        # regular minion is always alive
-        # otherwise, the user would not be able to execute this command
         return default_ret
     is_alive = alive()
-    log.debug("Is alive fetch:")
+    log.debug('Is alive fetch:')
     log.debug(is_alive)
-    if (
-        not is_alive.get("result", False)
-        or not is_alive.get("out", False)
-        or not is_alive.get("out", {}).get("is_alive", False)
-        or force
-    ):  # even if alive, but the user wants to force a restart
-        proxyid = __opts__.get("proxyid") or __opts__.get("id")
-        # close the connection
-        log.info("Closing the NAPALM proxy connection with %s", proxyid)
-        salt.utils.napalm.call(
-            napalm_device, "close", **{}  # pylint: disable=undefined-variable
-        )
-        # and re-open
-        log.info("Re-opening the NAPALM proxy connection with %s", proxyid)
-        salt.utils.napalm.call(
-            napalm_device, "open", **{}  # pylint: disable=undefined-variable
-        )
-        default_ret.update({"comment": "Connection restarted!"})
+    if not is_alive.get('result', False) or not is_alive.get('out', False) or (not is_alive.get('out', {}).get('is_alive', False)) or force:
+        proxyid = __opts__.get('proxyid') or __opts__.get('id')
+        log.info('Closing the NAPALM proxy connection with %s', proxyid)
+        salt.utils.napalm.call(napalm_device, 'close', **{})
+        log.info('Re-opening the NAPALM proxy connection with %s', proxyid)
+        salt.utils.napalm.call(napalm_device, 'open', **{})
+        default_ret.update({'comment': 'Connection restarted!'})
         return default_ret
-    # otherwise, I have nothing to do here:
     return default_ret
-
 
 @proxy_napalm_wrap
 def call(method, *args, **kwargs):
@@ -314,20 +220,13 @@ def call(method, *args, **kwargs):
         salt '*' napalm.call get_bgp_config group='my-group'
     """
     clean_kwargs = {}
-    for karg, warg in kwargs.items():
-        # remove the __pub args
-        if not karg.startswith("__pub_"):
+    for (karg, warg) in kwargs.items():
+        if not karg.startswith('__pub_'):
             clean_kwargs[karg] = warg
-    return salt.utils.napalm.call(
-        napalm_device,  # pylint: disable=undefined-variable
-        method,
-        *args,
-        **clean_kwargs
-    )
-
+    return salt.utils.napalm.call(napalm_device, method, *args, **clean_kwargs)
 
 @proxy_napalm_wrap
-def compliance_report(filepath=None, string=None, renderer="jinja|yaml", **kwargs):
+def compliance_report(filepath=None, string=None, renderer='jinja|yaml', **kwargs):
     """
     Return the compliance report.
 
@@ -448,15 +347,8 @@ def compliance_report(filepath=None, string=None, renderer="jinja|yaml", **kwarg
             result:
                 True
     """
-    validation_string = __salt__["slsutil.renderer"](
-        path=filepath, string=string, default_renderer=renderer, **kwargs
-    )
-    return salt.utils.napalm.call(
-        napalm_device,  # pylint: disable=undefined-variable
-        "compliance_report",
-        validation_source=validation_string,
-    )
-
+    validation_string = __salt__['slsutil.renderer'](path=filepath, string=string, default_renderer=renderer, **kwargs)
+    return salt.utils.napalm.call(napalm_device, 'compliance_report', validation_source=validation_string)
 
 @proxy_napalm_wrap
 def netmiko_args(**kwargs):
@@ -490,48 +382,20 @@ def netmiko_args(**kwargs):
         salt '*' napalm.netmiko_args
     """
     if not HAS_NETMIKO:
-        raise CommandExecutionError(
-            "Please install netmiko to be able to use this feature."
-        )
+        raise CommandExecutionError('Please install netmiko to be able to use this feature.')
     kwargs = {}
     napalm_opts = salt.utils.napalm.get_device_opts(__opts__, salt_obj=__salt__)
-    optional_args = napalm_opts["OPTIONAL_ARGS"]
+    optional_args = napalm_opts['OPTIONAL_ARGS']
     netmiko_args = _get_netmiko_args(optional_args)
-    kwargs["host"] = napalm_opts["HOSTNAME"]
-    kwargs["username"] = napalm_opts["USERNAME"]
-    kwargs["password"] = napalm_opts["PASSWORD"]
-    kwargs["timeout"] = napalm_opts["TIMEOUT"]
+    kwargs['host'] = napalm_opts['HOSTNAME']
+    kwargs['username'] = napalm_opts['USERNAME']
+    kwargs['password'] = napalm_opts['PASSWORD']
+    kwargs['timeout'] = napalm_opts['TIMEOUT']
     kwargs.update(netmiko_args)
-    netmiko_device_type_map = {
-        "junos": "juniper_junos",
-        "ios": "cisco_ios",
-        "iosxr": "cisco_xr",
-        "eos": "arista_eos",
-        "nxos_ssh": "cisco_nxos",
-        "asa": "cisco_asa",
-        "fortios": "fortinet",
-        "panos": "paloalto_panos",
-        "aos": "alcatel_aos",
-        "vyos": "vyos",
-        "f5": "f5_ltm",
-        "ce": "huawei",
-        "s350": "cisco_s300",
-    }
-    # If you have a device type that is not listed here, please submit a PR
-    # to add it, and/or add the map into your opts/Pillar: netmiko_device_type_map
-    # Example:
-    #
-    # netmiko_device_type_map:
-    #   junos: juniper_junos
-    #   ios: cisco_ios
-    #
-    # etc.
-    netmiko_device_type_map.update(
-        __salt__["config.get"]("netmiko_device_type_map", {})
-    )
-    kwargs["device_type"] = netmiko_device_type_map[__grains__["os"]]
+    netmiko_device_type_map = {'junos': 'juniper_junos', 'ios': 'cisco_ios', 'iosxr': 'cisco_xr', 'eos': 'arista_eos', 'nxos_ssh': 'cisco_nxos', 'asa': 'cisco_asa', 'fortios': 'fortinet', 'panos': 'paloalto_panos', 'aos': 'alcatel_aos', 'vyos': 'vyos', 'f5': 'f5_ltm', 'ce': 'huawei', 's350': 'cisco_s300'}
+    netmiko_device_type_map.update(__salt__['config.get']('netmiko_device_type_map', {}))
+    kwargs['device_type'] = netmiko_device_type_map[__grains__['os']]
     return kwargs
-
 
 @proxy_napalm_wrap
 def netmiko_fun(fun, *args, **kwargs):
@@ -560,12 +424,11 @@ def netmiko_fun(fun, *args, **kwargs):
 
         salt '*' napalm.netmiko_fun send_command 'show version'
     """
-    if "netmiko." not in fun:
-        fun = "netmiko.{fun}".format(fun=fun)
+    if 'netmiko.' not in fun:
+        fun = 'netmiko.{fun}'.format(fun=fun)
     netmiko_kwargs = netmiko_args()
     kwargs.update(netmiko_kwargs)
     return __salt__[fun](*args, **kwargs)
-
 
 @proxy_napalm_wrap
 def netmiko_call(method, *args, **kwargs):
@@ -593,8 +456,7 @@ def netmiko_call(method, *args, **kwargs):
     """
     netmiko_kwargs = netmiko_args()
     kwargs.update(netmiko_kwargs)
-    return __salt__["netmiko.call"](method, *args, **kwargs)
-
+    return __salt__['netmiko.call'](method, *args, **kwargs)
 
 @proxy_napalm_wrap
 def netmiko_multi_call(*methods, **kwargs):
@@ -619,8 +481,7 @@ def netmiko_multi_call(*methods, **kwargs):
     """
     netmiko_kwargs = netmiko_args()
     kwargs.update(netmiko_kwargs)
-    return __salt__["netmiko.multi_call"](*methods, **kwargs)
-
+    return __salt__['netmiko.multi_call'](*methods, **kwargs)
 
 @proxy_napalm_wrap
 def netmiko_commands(*commands, **kwargs):
@@ -670,7 +531,6 @@ def netmiko_commands(*commands, **kwargs):
     for cmd in commands:
         ret.append(conn.send_command(cmd))
     return ret
-
 
 @proxy_napalm_wrap
 def netmiko_config(*config_commands, **kwargs):
@@ -739,8 +599,7 @@ def netmiko_config(*config_commands, **kwargs):
     """
     netmiko_kwargs = netmiko_args()
     kwargs.update(netmiko_kwargs)
-    return __salt__["netmiko.send_config"](config_commands=config_commands, **kwargs)
-
+    return __salt__['netmiko.send_config'](config_commands=config_commands, **kwargs)
 
 @proxy_napalm_wrap
 def netmiko_conn(**kwargs):
@@ -763,14 +622,8 @@ def netmiko_conn(**kwargs):
         res = conn.send_command('show interfaces')
         conn.disconnect()
     """
-    salt.utils.versions.warn_until(
-        "Chlorine",
-        "This 'napalm_mod.netmiko_conn' function as been deprecated and "
-        "will be removed in the {version} release, as such, it has been "
-        "made an internal function since it is not suitable for CLI usage",
-    )
+    salt.utils.versions.warn_until('Chlorine', "This 'napalm_mod.netmiko_conn' function as been deprecated and will be removed in the {version} release, as such, it has been made an internal function since it is not suitable for CLI usage")
     return _netmiko_conn(**kwargs)
-
 
 @proxy_napalm_wrap
 def junos_rpc(cmd=None, dest=None, format=None, **kwargs):
@@ -816,18 +669,16 @@ def junos_rpc(cmd=None, dest=None, format=None, **kwargs):
         salt '*' napalm.junos_rpc get-lldp-neighbors-information
         salt '*' napalm.junos_rpc get-config <configuration><system><ntp/></system></configuration>
     """
-    prep = _junos_prep_fun(napalm_device)  # pylint: disable=undefined-variable
-    if not prep["result"]:
+    prep = _junos_prep_fun(napalm_device)
+    if not prep['result']:
         return prep
     if not format:
-        format = "xml"
-    rpc_ret = __salt__["junos.rpc"](cmd=cmd, dest=dest, format=format, **kwargs)
-    rpc_ret["comment"] = rpc_ret.pop("message", "")
-    rpc_ret["result"] = rpc_ret.pop("out", False)
-    rpc_ret["out"] = rpc_ret.pop("rpc_reply", None)
-    # The comment field is "message" in the Junos module
+        format = 'xml'
+    rpc_ret = __salt__['junos.rpc'](cmd=cmd, dest=dest, format=format, **kwargs)
+    rpc_ret['comment'] = rpc_ret.pop('message', '')
+    rpc_ret['result'] = rpc_ret.pop('out', False)
+    rpc_ret['out'] = rpc_ret.pop('rpc_reply', None)
     return rpc_ret
-
 
 @proxy_napalm_wrap
 def junos_commit(**kwargs):
@@ -872,11 +723,10 @@ def junos_commit(**kwargs):
         salt '*' napalm.junos_commit dev_timeout=60 confirm=10
         salt '*' napalm.junos_commit sync=True dev_timeout=90
     """
-    prep = _junos_prep_fun(napalm_device)  # pylint: disable=undefined-variable
-    if not prep["result"]:
+    prep = _junos_prep_fun(napalm_device)
+    if not prep['result']:
         return prep
-    return __salt__["junos.commit"](**kwargs)
-
+    return __salt__['junos.commit'](**kwargs)
 
 @proxy_napalm_wrap
 def junos_install_os(path=None, **kwargs):
@@ -911,11 +761,10 @@ def junos_install_os(path=None, **kwargs):
 
         salt '*' napalm.junos_install_os salt://images/junos_16_1.tgz reboot=True
     """
-    prep = _junos_prep_fun(napalm_device)  # pylint: disable=undefined-variable
-    if not prep["result"]:
+    prep = _junos_prep_fun(napalm_device)
+    if not prep['result']:
         return prep
-    return __salt__["junos.install_os"](path=path, **kwargs)
-
+    return __salt__['junos.install_os'](path=path, **kwargs)
 
 @proxy_napalm_wrap
 def junos_facts(**kwargs):
@@ -930,21 +779,16 @@ def junos_facts(**kwargs):
 
         salt '*' napalm.junos_facts
     """
-    prep = _junos_prep_fun(napalm_device)  # pylint: disable=undefined-variable
-    if not prep["result"]:
+    prep = _junos_prep_fun(napalm_device)
+    if not prep['result']:
         return prep
-    # pylint: disable=undefined-variable
-    facts = dict(napalm_device["DRIVER"].device.facts)
-    # pylint: enable=undefined-variable
-    if "version_info" in facts:
-        facts["version_info"] = dict(facts["version_info"])
-    # For backward compatibility. 'junos_info' is present
-    # only of in newer versions of facts.
-    if "junos_info" in facts:
-        for re in facts["junos_info"]:
-            facts["junos_info"][re]["object"] = dict(facts["junos_info"][re]["object"])
+    facts = dict(napalm_device['DRIVER'].device.facts)
+    if 'version_info' in facts:
+        facts['version_info'] = dict(facts['version_info'])
+    if 'junos_info' in facts:
+        for re in facts['junos_info']:
+            facts['junos_info'][re]['object'] = dict(facts['junos_info'][re]['object'])
     return facts
-
 
 @proxy_napalm_wrap
 def junos_cli(command, format=None, dev_timeout=None, dest=None, **kwargs):
@@ -973,13 +817,10 @@ def junos_cli(command, format=None, dev_timeout=None, dest=None, **kwargs):
 
         salt '*' napalm.junos_cli 'show lldp neighbors'
     """
-    prep = _junos_prep_fun(napalm_device)  # pylint: disable=undefined-variable
-    if not prep["result"]:
+    prep = _junos_prep_fun(napalm_device)
+    if not prep['result']:
         return prep
-    return __salt__["junos.cli"](
-        command, format=format, dev_timeout=dev_timeout, dest=dest, **kwargs
-    )
-
+    return __salt__['junos.cli'](command, format=format, dev_timeout=dev_timeout, dest=dest, **kwargs)
 
 @proxy_napalm_wrap
 def junos_copy_file(src, dst, **kwargs):
@@ -1001,12 +842,11 @@ def junos_copy_file(src, dst, **kwargs):
 
         salt '*' napalm.junos_copy_file https://example.com/junos.cfg /var/tmp/myjunos.cfg
     """
-    prep = _junos_prep_fun(napalm_device)  # pylint: disable=undefined-variable
-    if not prep["result"]:
+    prep = _junos_prep_fun(napalm_device)
+    if not prep['result']:
         return prep
-    cached_src = __salt__["cp.cache_file"](src)
-    return __salt__["junos.file_copy"](cached_src, dst)
-
+    cached_src = __salt__['cp.cache_file'](src)
+    return __salt__['junos.file_copy'](cached_src, dst)
 
 @proxy_napalm_wrap
 def junos_call(fun, *args, **kwargs):
@@ -1034,21 +874,16 @@ def junos_call(fun, *args, **kwargs):
 
         salt '*' napalm.junos_fun cli 'show system commit'
     """
-    prep = _junos_prep_fun(napalm_device)  # pylint: disable=undefined-variable
-    if not prep["result"]:
+    prep = _junos_prep_fun(napalm_device)
+    if not prep['result']:
         return prep
-    if "junos." not in fun:
-        mod_fun = "junos.{}".format(fun)
+    if 'junos.' not in fun:
+        mod_fun = 'junos.{}'.format(fun)
     else:
         mod_fun = fun
     if mod_fun not in __salt__:
-        return {
-            "out": None,
-            "result": False,
-            "comment": "{} is not a valid function".format(fun),
-        }
+        return {'out': None, 'result': False, 'comment': '{} is not a valid function'.format(fun)}
     return __salt__[mod_fun](*args, **kwargs)
-
 
 def pyeapi_nxos_api_args(**prev_kwargs):
     """
@@ -1065,26 +900,22 @@ def pyeapi_nxos_api_args(**prev_kwargs):
     """
     kwargs = {}
     napalm_opts = salt.utils.napalm.get_device_opts(__opts__, salt_obj=__salt__)
-    optional_args = napalm_opts["OPTIONAL_ARGS"]
-    kwargs["host"] = napalm_opts["HOSTNAME"]
-    kwargs["username"] = napalm_opts["USERNAME"]
-    kwargs["password"] = napalm_opts["PASSWORD"]
-    kwargs["timeout"] = napalm_opts["TIMEOUT"]
-
-    if "transport" in optional_args and optional_args["transport"]:
-        kwargs["transport"] = optional_args["transport"]
+    optional_args = napalm_opts['OPTIONAL_ARGS']
+    kwargs['host'] = napalm_opts['HOSTNAME']
+    kwargs['username'] = napalm_opts['USERNAME']
+    kwargs['password'] = napalm_opts['PASSWORD']
+    kwargs['timeout'] = napalm_opts['TIMEOUT']
+    if 'transport' in optional_args and optional_args['transport']:
+        kwargs['transport'] = optional_args['transport']
     else:
-        kwargs["transport"] = "https"
-
-    if "port" in optional_args and optional_args["port"]:
-        kwargs["port"] = optional_args["port"]
+        kwargs['transport'] = 'https'
+    if 'port' in optional_args and optional_args['port']:
+        kwargs['port'] = optional_args['port']
     else:
-        kwargs["port"] = 80 if kwargs["transport"] == "http" else 443
-
-    kwargs["verify"] = optional_args.get("verify")
+        kwargs['port'] = 80 if kwargs['transport'] == 'http' else 443
+    kwargs['verify'] = optional_args.get('verify')
     prev_kwargs.update(kwargs)
     return prev_kwargs
-
 
 @proxy_napalm_wrap
 def pyeapi_run_commands(*commands, **kwargs):
@@ -1109,8 +940,7 @@ def pyeapi_run_commands(*commands, **kwargs):
         salt '*' napalm.pyeapi_run_commands 'show ip bgp neighbors'
     """
     pyeapi_kwargs = pyeapi_nxos_api_args(**kwargs)
-    return __salt__["pyeapi.run_commands"](*commands, **pyeapi_kwargs)
-
+    return __salt__['pyeapi.run_commands'](*commands, **pyeapi_kwargs)
 
 @proxy_napalm_wrap
 def pyeapi_call(method, *args, **kwargs):
@@ -1136,8 +966,7 @@ def pyeapi_call(method, *args, **kwargs):
         salt '*' napalm.pyeapi_call get_config as_string=True
     """
     pyeapi_kwargs = pyeapi_nxos_api_args(**kwargs)
-    return __salt__["pyeapi.call"](method, *args, **pyeapi_kwargs)
-
+    return __salt__['pyeapi.call'](method, *args, **pyeapi_kwargs)
 
 @proxy_napalm_wrap
 def pyeapi_conn(**kwargs):
@@ -1160,25 +989,11 @@ def pyeapi_conn(**kwargs):
         res1 = conn.run_commands('show version')
         res2 = conn.get_config(as_string=True)
     """
-    salt.utils.versions.warn_until(
-        "Chlorine",
-        "This 'napalm_mod.pyeapi_conn' function as been deprecated and "
-        "will be removed in the {version} release, as such, it has been "
-        "made an internal function since it is not suitable for CLI usage",
-    )
+    salt.utils.versions.warn_until('Chlorine', "This 'napalm_mod.pyeapi_conn' function as been deprecated and will be removed in the {version} release, as such, it has been made an internal function since it is not suitable for CLI usage")
     return _pyeapi_conn(**kwargs)
 
-
 @proxy_napalm_wrap
-def pyeapi_config(
-    commands=None,
-    config_file=None,
-    template_engine="jinja",
-    context=None,
-    defaults=None,
-    saltenv="base",
-    **kwargs
-):
+def pyeapi_config(commands=None, config_file=None, template_engine='jinja', context=None, defaults=None, saltenv='base', **kwargs):
     """
     .. versionadded:: 2019.2.0
 
@@ -1228,19 +1043,10 @@ def pyeapi_config(
         salt '*' napalm.pyeapi_config 'ntp server 1.2.3.4'
     """
     pyeapi_kwargs = pyeapi_nxos_api_args(**kwargs)
-    return __salt__["pyeapi.config"](
-        commands=commands,
-        config_file=config_file,
-        template_engine=template_engine,
-        context=context,
-        defaults=defaults,
-        saltenv=saltenv,
-        **pyeapi_kwargs
-    )
-
+    return __salt__['pyeapi.config'](commands=commands, config_file=config_file, template_engine=template_engine, context=context, defaults=defaults, saltenv=saltenv, **pyeapi_kwargs)
 
 @proxy_napalm_wrap
-def nxos_api_rpc(commands, method="cli", **kwargs):
+def nxos_api_rpc(commands, method='cli', **kwargs):
     """
     .. versionadded:: 2019.2.0
 
@@ -1260,19 +1066,10 @@ def nxos_api_rpc(commands, method="cli", **kwargs):
         salt '*' napalm.nxos_api_rpc 'show version'
     """
     nxos_api_kwargs = pyeapi_nxos_api_args(**kwargs)
-    return __salt__["nxos_api.rpc"](commands, method=method, **nxos_api_kwargs)
-
+    return __salt__['nxos_api.rpc'](commands, method=method, **nxos_api_kwargs)
 
 @proxy_napalm_wrap
-def nxos_api_config(
-    commands=None,
-    config_file=None,
-    template_engine="jinja",
-    context=None,
-    defaults=None,
-    saltenv="base",
-    **kwargs
-):
+def nxos_api_config(commands=None, config_file=None, template_engine='jinja', context=None, defaults=None, saltenv='base', **kwargs):
     """
      .. versionadded:: 2019.2.0
 
@@ -1320,16 +1117,7 @@ def nxos_api_config(
         salt '*' napalm.nxos_api_config config_file=https://bit.ly/2LGLcDy context="{'servers': ['1.2.3.4']}"
     """
     nxos_api_kwargs = pyeapi_nxos_api_args(**kwargs)
-    return __salt__["nxos_api.config"](
-        commands=commands,
-        config_file=config_file,
-        template_engine=template_engine,
-        context=context,
-        defaults=defaults,
-        saltenv=saltenv,
-        **nxos_api_kwargs
-    )
-
+    return __salt__['nxos_api.config'](commands=commands, config_file=config_file, template_engine=template_engine, context=context, defaults=defaults, saltenv=saltenv, **nxos_api_kwargs)
 
 @proxy_napalm_wrap
 def nxos_api_show(commands, raw_text=True, **kwargs):
@@ -1352,8 +1140,7 @@ def nxos_api_show(commands, raw_text=True, **kwargs):
         salt '*' napalm.nxos_api_show 'show bgp sessions' 'show processes' raw_text=False
     """
     nxos_api_kwargs = pyeapi_nxos_api_args(**kwargs)
-    return __salt__["nxos_api.show"](commands, raw_text=raw_text, **nxos_api_kwargs)
-
+    return __salt__['nxos_api.show'](commands, raw_text=raw_text, **nxos_api_kwargs)
 
 @proxy_napalm_wrap
 def rpc(command, **kwargs):
@@ -1401,20 +1188,15 @@ def rpc(command, **kwargs):
         salt '*' napalm.rpc 'show version'
         salt '*' napalm.rpc get-interfaces
     """
-    default_map = {
-        "junos": "napalm.junos_rpc",
-        "eos": "napalm.pyeapi_run_commands",
-        "nxos": "napalm.nxos_api_rpc",
-    }
-    napalm_map = __salt__["config.get"]("napalm_rpc_map", {})
+    default_map = {'junos': 'napalm.junos_rpc', 'eos': 'napalm.pyeapi_run_commands', 'nxos': 'napalm.nxos_api_rpc'}
+    napalm_map = __salt__['config.get']('napalm_rpc_map', {})
     napalm_map.update(default_map)
-    fun = napalm_map.get(__grains__["os"], "napalm.netmiko_commands")
+    fun = napalm_map.get(__grains__['os'], 'napalm.netmiko_commands')
     return __salt__[fun](command, **kwargs)
 
-
 @depends(HAS_CISCOCONFPARSE)
-def config_find_lines(regex, source="running"):
-    r"""
+def config_find_lines(regex, source='running'):
+    """
     .. versionadded:: 2019.2.0
 
     Return the configuration lines that match the regular expressions from the
@@ -1432,15 +1214,14 @@ def config_find_lines(regex, source="running"):
 
     .. code-block:: bash
 
-        salt '*' napalm.config_find_lines '^interface Ethernet1\d'
+        salt '*' napalm.config_find_lines '^interface Ethernet1\\d'
     """
-    config_txt = __salt__["net.config"](source=source)["out"][source]
-    return __salt__["ciscoconfparse.find_lines"](config=config_txt, regex=regex)
-
+    config_txt = __salt__['net.config'](source=source)['out'][source]
+    return __salt__['ciscoconfparse.find_lines'](config=config_txt, regex=regex)
 
 @depends(HAS_CISCOCONFPARSE)
-def config_lines_w_child(parent_regex, child_regex, source="running"):
-    r"""
+def config_lines_w_child(parent_regex, child_regex, source='running'):
+    """
      .. versionadded:: 2019.2.0
 
     Return the configuration lines that match the regular expressions from the
@@ -1471,14 +1252,11 @@ def config_lines_w_child(parent_regex, child_regex, source="running"):
         salt '*' napalm.config_lines_w_child '^interface' 'ip address'
         salt '*' napalm.config_lines_w_child '^interface' 'shutdown' source=candidate
     """
-    config_txt = __salt__["net.config"](source=source)["out"][source]
-    return __salt__["ciscoconfparse.find_lines_w_child"](
-        config=config_txt, parent_regex=parent_regex, child_regex=child_regex
-    )
-
+    config_txt = __salt__['net.config'](source=source)['out'][source]
+    return __salt__['ciscoconfparse.find_lines_w_child'](config=config_txt, parent_regex=parent_regex, child_regex=child_regex)
 
 @depends(HAS_CISCOCONFPARSE)
-def config_lines_wo_child(parent_regex, child_regex, source="running"):
+def config_lines_wo_child(parent_regex, child_regex, source='running'):
     """
       .. versionadded:: 2019.2.0
 
@@ -1511,15 +1289,12 @@ def config_lines_wo_child(parent_regex, child_regex, source="running"):
         salt '*' napalm.config_lines_wo_child '^interface' 'ip address'
         salt '*' napalm.config_lines_wo_child '^interface' 'shutdown' source=candidate
     """
-    config_txt = __salt__["net.config"](source=source)["out"][source]
-    return __salt__["ciscoconfparse.find_lines_wo_child"](
-        config=config_txt, parent_regex=parent_regex, child_regex=child_regex
-    )
-
+    config_txt = __salt__['net.config'](source=source)['out'][source]
+    return __salt__['ciscoconfparse.find_lines_wo_child'](config=config_txt, parent_regex=parent_regex, child_regex=child_regex)
 
 @depends(HAS_CISCOCONFPARSE)
-def config_filter_lines(parent_regex, child_regex, source="running"):
-    r"""
+def config_filter_lines(parent_regex, child_regex, source='running'):
+    """
     .. versionadded:: 2019.2.0
 
     Return a list of detailed matches, for the configuration blocks (parent-child
@@ -1558,13 +1333,10 @@ def config_filter_lines(parent_regex, child_regex, source="running"):
         salt '*' napalm.config_filter_lines '^interface' 'ip address'
         salt '*' napalm.config_filter_lines '^interface' 'shutdown' source=candidate
     """
-    config_txt = __salt__["net.config"](source=source)["out"][source]
-    return __salt__["ciscoconfparse.filter_lines"](
-        config=config_txt, parent_regex=parent_regex, child_regex=child_regex
-    )
+    config_txt = __salt__['net.config'](source=source)['out'][source]
+    return __salt__['ciscoconfparse.filter_lines'](config=config_txt, parent_regex=parent_regex, child_regex=child_regex)
 
-
-def config_tree(source="running", with_tags=False):
+def config_tree(source='running', with_tags=False):
     """
     .. versionadded:: 2019.2.0
 
@@ -1585,13 +1357,10 @@ def config_tree(source="running", with_tags=False):
 
         salt '*' napalm.config_tree
     """
-    config_txt = __salt__["net.config"](source=source)["out"][source]
-    return __salt__["iosconfig.tree"](config=config_txt)
+    config_txt = __salt__['net.config'](source=source)['out'][source]
+    return __salt__['iosconfig.tree'](config=config_txt)
 
-
-def config_merge_tree(
-    source="running", merge_config=None, merge_path=None, saltenv="base"
-):
+def config_merge_tree(source='running', merge_config=None, merge_path=None, saltenv='base'):
     """
     .. versionadded:: 2019.2.0
 
@@ -1622,18 +1391,10 @@ def config_merge_tree(
 
         salt '*' napalm.config_merge_tree merge_path=salt://path/to/merge.cfg
     """
-    config_txt = __salt__["net.config"](source=source)["out"][source]
-    return __salt__["iosconfig.merge_tree"](
-        initial_config=config_txt,
-        merge_config=merge_config,
-        merge_path=merge_path,
-        saltenv=saltenv,
-    )
+    config_txt = __salt__['net.config'](source=source)['out'][source]
+    return __salt__['iosconfig.merge_tree'](initial_config=config_txt, merge_config=merge_config, merge_path=merge_path, saltenv=saltenv)
 
-
-def config_merge_text(
-    source="running", merge_config=None, merge_path=None, saltenv="base"
-):
+def config_merge_text(source='running', merge_config=None, merge_path=None, saltenv='base'):
     """
     .. versionadded:: 2019.2.0
 
@@ -1665,18 +1426,10 @@ def config_merge_text(
 
         salt '*' napalm.config_merge_text merge_path=salt://path/to/merge.cfg
     """
-    config_txt = __salt__["net.config"](source=source)["out"][source]
-    return __salt__["iosconfig.merge_text"](
-        initial_config=config_txt,
-        merge_config=merge_config,
-        merge_path=merge_path,
-        saltenv=saltenv,
-    )
+    config_txt = __salt__['net.config'](source=source)['out'][source]
+    return __salt__['iosconfig.merge_text'](initial_config=config_txt, merge_config=merge_config, merge_path=merge_path, saltenv=saltenv)
 
-
-def config_merge_diff(
-    source="running", merge_config=None, merge_path=None, saltenv="base"
-):
+def config_merge_diff(source='running', merge_config=None, merge_path=None, saltenv='base'):
     """
     .. versionadded:: 2019.2.0
 
@@ -1707,18 +1460,10 @@ def config_merge_diff(
 
         salt '*' napalm.config_merge_diff merge_path=salt://path/to/merge.cfg
     """
-    config_txt = __salt__["net.config"](source=source)["out"][source]
-    return __salt__["iosconfig.merge_diff"](
-        initial_config=config_txt,
-        merge_config=merge_config,
-        merge_path=merge_path,
-        saltenv=saltenv,
-    )
+    config_txt = __salt__['net.config'](source=source)['out'][source]
+    return __salt__['iosconfig.merge_diff'](initial_config=config_txt, merge_config=merge_config, merge_path=merge_path, saltenv=saltenv)
 
-
-def config_diff_tree(
-    source1="candidate", candidate_path=None, source2="running", running_path=None
-):
+def config_diff_tree(source1='candidate', candidate_path=None, source2='running', running_path=None):
     """
     .. versionadded:: 2019.2.0
 
@@ -1769,20 +1514,12 @@ def config_diff_tree(
         salt '*' napalm.config_diff_tree
         salt '*' napalm.config_diff_tree running startup
     """
-    get_config = __salt__["net.config"]()["out"]
+    get_config = __salt__['net.config']()['out']
     candidate_cfg = get_config[source1]
     running_cfg = get_config[source2]
-    return __salt__["iosconfig.diff_tree"](
-        candidate_config=candidate_cfg,
-        candidate_path=candidate_path,
-        running_config=running_cfg,
-        running_path=running_path,
-    )
+    return __salt__['iosconfig.diff_tree'](candidate_config=candidate_cfg, candidate_path=candidate_path, running_config=running_cfg, running_path=running_path)
 
-
-def config_diff_text(
-    source1="candidate", candidate_path=None, source2="running", running_path=None
-):
+def config_diff_text(source1='candidate', candidate_path=None, source2='running', running_path=None):
     """
     .. versionadded:: 2019.2.0
 
@@ -1826,21 +1563,13 @@ def config_diff_text(
         # Would compare the running config with the configuration available at
         # https://bit.ly/2mAdq7z
     """
-    get_config = __salt__["net.config"]()["out"]
+    get_config = __salt__['net.config']()['out']
     candidate_cfg = get_config[source1]
     running_cfg = get_config[source2]
-    return __salt__["iosconfig.diff_text"](
-        candidate_config=candidate_cfg,
-        candidate_path=candidate_path,
-        running_config=running_cfg,
-        running_path=running_path,
-    )
-
+    return __salt__['iosconfig.diff_text'](candidate_config=candidate_cfg, candidate_path=candidate_path, running_config=running_cfg, running_path=running_path)
 
 @depends(HAS_SCP)
-def scp_get(
-    remote_path, local_path="", recursive=False, preserve_times=False, **kwargs
-):
+def scp_get(remote_path, local_path='', recursive=False, preserve_times=False, **kwargs):
     """
     .. versionadded:: 2019.2.0
 
@@ -1908,26 +1637,12 @@ def scp_get(
         salt '*' napalm.scp_get /var/tmp/file /tmp/file auto_add_policy=True
     """
     conn_args = netmiko_args(**kwargs)
-    conn_args["hostname"] = conn_args["host"]
+    conn_args['hostname'] = conn_args['host']
     kwargs.update(conn_args)
-    return __salt__["scp.get"](
-        remote_path,
-        local_path=local_path,
-        recursive=recursive,
-        preserve_times=preserve_times,
-        **kwargs
-    )
-
+    return __salt__['scp.get'](remote_path, local_path=local_path, recursive=recursive, preserve_times=preserve_times, **kwargs)
 
 @depends(HAS_SCP)
-def scp_put(
-    files,
-    remote_path=None,
-    recursive=False,
-    preserve_times=False,
-    saltenv="base",
-    **kwargs
-):
+def scp_put(files, remote_path=None, recursive=False, preserve_times=False, saltenv='base', **kwargs):
     """
     .. versionadded:: 2019.2.0
 
@@ -2013,13 +1728,6 @@ def scp_put(
         salt '*' napalm.scp_put /path/to/file /var/tmp/file auto_add_policy=True
     """
     conn_args = netmiko_args(**kwargs)
-    conn_args["hostname"] = conn_args["host"]
+    conn_args['hostname'] = conn_args['host']
     kwargs.update(conn_args)
-    return __salt__["scp.put"](
-        files,
-        remote_path=remote_path,
-        recursive=recursive,
-        preserve_times=preserve_times,
-        saltenv=saltenv,
-        **kwargs
-    )
+    return __salt__['scp.put'](files, remote_path=remote_path, recursive=recursive, preserve_times=preserve_times, saltenv=saltenv, **kwargs)

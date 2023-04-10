@@ -2,34 +2,23 @@
 Manage a local persistent data structure that can hold any arbitrary data
 specific to the minion
 """
-
 import ast
 import logging
 import os
-
 import salt.payload
 import salt.utils.files
-
 log = logging.getLogger(__name__)
 
-
 def clear():
-    """
-    Clear out all of the data in the minion datastore, this function is
-    destructive!
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt '*' data.clear
-    """
+    log.info('Trace')
+    "\n    Clear out all of the data in the minion datastore, this function is\n    destructive!\n\n    CLI Example:\n\n    .. code-block:: bash\n\n        salt '*' data.clear\n    "
     try:
-        os.remove(os.path.join(__opts__["cachedir"], "datastore"))
+        log.info('Trace')
+        os.remove(os.path.join(__opts__['cachedir'], 'datastore'))
     except OSError:
+        log.info('Trace')
         pass
     return True
-
 
 def load():
     """
@@ -42,12 +31,13 @@ def load():
         salt '*' data.load
     """
     try:
-        datastore_path = os.path.join(__opts__["cachedir"], "datastore")
-        with salt.utils.files.fopen(datastore_path, "rb") as rfh:
+        log.info('Trace')
+        datastore_path = os.path.join(__opts__['cachedir'], 'datastore')
+        with salt.utils.files.fopen(datastore_path, 'rb') as rfh:
             return salt.payload.loads(rfh.read())
     except (OSError, NameError):
+        log.info('Trace')
         return {}
-
 
 def dump(new_data):
     """
@@ -64,17 +54,15 @@ def dump(new_data):
             new_data = ast.literal_eval(new_data)
         else:
             return False
-
     try:
-        datastore_path = os.path.join(__opts__["cachedir"], "datastore")
-        with salt.utils.files.fopen(datastore_path, "w+b") as fn_:
+        log.info('Trace')
+        datastore_path = os.path.join(__opts__['cachedir'], 'datastore')
+        with salt.utils.files.fopen(datastore_path, 'w+b') as fn_:
             salt.payload.dump(new_data, fn_)
-
         return True
-
     except (OSError, NameError):
+        log.info('Trace')
         return False
-
 
 def update(key, value):
     """
@@ -91,7 +79,6 @@ def update(key, value):
     dump(store)
     return True
 
-
 def cas(key, value, old_value):
     """
     Check and set a value in the minion datastore
@@ -105,14 +92,11 @@ def cas(key, value, old_value):
     store = load()
     if key not in store:
         return False
-
     if store[key] != old_value:
         return False
-
     store[key] = value
     dump(store)
     return True
-
 
 def pop(key, default=None):
     """
@@ -131,7 +115,6 @@ def pop(key, default=None):
     dump(store)
     return val
 
-
 def get(key, default=None):
     """
     Get a (list of) value(s) from the minion datastore
@@ -146,14 +129,12 @@ def get(key, default=None):
         salt '*' data.get '["key1", "key2"]'
     """
     store = load()
-
     if isinstance(key, str):
         return store.get(key, default)
     elif default is None:
         return [store[k] for k in key if k in store]
     else:
         return [store.get(k, default) for k in key]
-
 
 def keys():
     """
@@ -170,7 +151,6 @@ def keys():
     store = load()
     return [k for k in store.keys()]
 
-
 def values():
     """
     Get values from the minion datastore
@@ -186,7 +166,6 @@ def values():
     store = load()
     return [v for v in store.values()]
 
-
 def items():
     """
     Get items from the minion datastore
@@ -201,7 +180,6 @@ def items():
     """
     store = load()
     return store
-
 
 def has_key(key):
     """

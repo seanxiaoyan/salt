@@ -268,35 +268,23 @@ to find an example structure for Pillar as well as an example ``.sls`` file
 for standing up an ESXi host from scratch.
 
 """
-
-
 import logging
 import os
-
 from salt.config.schemas.esxi import EsxiProxySchema
 from salt.exceptions import InvalidConfigError, SaltSystemExit
 from salt.utils.dictupdate import merge
-
-# This must be present or the Salt loader won't load this module.
-__proxyenabled__ = ["esxi"]
-
+import logging
+log = logging.getLogger(__name__)
+__proxyenabled__ = ['esxi']
 try:
     import jsonschema
-
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
-
-# Variables are scoped to this module so we can have persistent data
-# across calls to fns in here.
 GRAINS_CACHE = {}
 DETAILS = {}
-
-# Set up logging
 log = logging.getLogger(__file__)
-# Define the module's virtual name
-__virtualname__ = "esxi"
-
+__virtualname__ = 'esxi'
 
 def __virtual__():
     """
@@ -304,130 +292,98 @@ def __virtual__():
     """
     if HAS_JSONSCHEMA:
         return __virtualname__
-
-    return False, "The ESXi Proxy Minion module did not load."
-
+    return (False, 'The ESXi Proxy Minion module did not load.')
 
 def init(opts):
-    """
-    This function gets called when the proxy starts up. For
-    ESXi devices, the host, login credentials, and, if configured,
-    the protocol and port are cached.
-    """
-    log.debug("Initting esxi proxy module in process %s", os.getpid())
-    log.debug("Validating esxi proxy input")
+    log.info('Trace')
+    '\n    This function gets called when the proxy starts up. For\n    ESXi devices, the host, login credentials, and, if configured,\n    the protocol and port are cached.\n    '
+    log.debug('Initting esxi proxy module in process %s', os.getpid())
+    log.debug('Validating esxi proxy input')
     schema = EsxiProxySchema.serialize()
-    log.trace("esxi_proxy_schema = %s", schema)
-    proxy_conf = merge(opts.get("proxy", {}), __pillar__.get("proxy", {}))
-    log.trace("proxy_conf = %s", proxy_conf)
+    log.trace('esxi_proxy_schema = %s', schema)
+    proxy_conf = merge(opts.get('proxy', {}), __pillar__.get('proxy', {}))
+    log.trace('proxy_conf = %s', proxy_conf)
     try:
+        log.info('Trace')
         jsonschema.validate(proxy_conf, schema)
     except jsonschema.exceptions.ValidationError as exc:
+        log.info('Trace')
         raise InvalidConfigError(exc)
-
-    DETAILS["proxytype"] = proxy_conf["proxytype"]
-    if ("host" not in proxy_conf) and ("vcenter" not in proxy_conf):
-        log.critical(
-            "Neither 'host' nor 'vcenter' keys found in pillar for this proxy."
-        )
+    DETAILS['proxytype'] = proxy_conf['proxytype']
+    if 'host' not in proxy_conf and 'vcenter' not in proxy_conf:
+        log.critical("Neither 'host' nor 'vcenter' keys found in pillar for this proxy.")
         return False
-    if "host" in proxy_conf:
-        # We have started the proxy by connecting directly to the host
-        if "username" not in proxy_conf:
+    if 'host' in proxy_conf:
+        log.info('Trace')
+        if 'username' not in proxy_conf:
             log.critical("No 'username' key found in pillar for this proxy.")
             return False
-        if "passwords" not in proxy_conf:
+        if 'passwords' not in proxy_conf:
             log.critical("No 'passwords' key found in pillar for this proxy.")
             return False
-        host = proxy_conf["host"]
-
-        # Get the correct login details
+        host = proxy_conf['host']
         try:
-            username, password = find_credentials(host)
+            log.info('Trace')
+            (username, password) = find_credentials(host)
         except SaltSystemExit as err:
-            log.critical("Error: %s", err)
+            log.critical('Error: %s', err)
             return False
-
-        # Set configuration details
-        DETAILS["host"] = host
-        DETAILS["username"] = username
-        DETAILS["password"] = password
-        DETAILS["protocol"] = proxy_conf.get("protocol")
-        DETAILS["port"] = proxy_conf.get("port")
+        DETAILS['host'] = host
+        DETAILS['username'] = username
+        DETAILS['password'] = password
+        DETAILS['protocol'] = proxy_conf.get('protocol')
+        DETAILS['port'] = proxy_conf.get('port')
         return True
-
-    if "vcenter" in proxy_conf:
-        vcenter = proxy_conf["vcenter"]
-        if not proxy_conf.get("esxi_host"):
+    if 'vcenter' in proxy_conf:
+        log.info('Trace')
+        vcenter = proxy_conf['vcenter']
+        if not proxy_conf.get('esxi_host'):
             log.critical("No 'esxi_host' key found in pillar for this proxy.")
-        DETAILS["esxi_host"] = proxy_conf["esxi_host"]
-        # We have started the proxy by connecting via the vCenter
-        if "mechanism" not in proxy_conf:
+        DETAILS['esxi_host'] = proxy_conf['esxi_host']
+        if 'mechanism' not in proxy_conf:
             log.critical("No 'mechanism' key found in pillar for this proxy.")
             return False
-        mechanism = proxy_conf["mechanism"]
-        # Save mandatory fields in cache
-        for key in ("vcenter", "mechanism"):
+        mechanism = proxy_conf['mechanism']
+        for key in ('vcenter', 'mechanism'):
             DETAILS[key] = proxy_conf[key]
-
-        if mechanism == "userpass":
-            if "username" not in proxy_conf:
+        if mechanism == 'userpass':
+            if 'username' not in proxy_conf:
                 log.critical("No 'username' key found in pillar for this proxy.")
                 return False
-            if "passwords" not in proxy_conf and len(proxy_conf["passwords"]) > 0:
-
-                log.critical(
-                    "Mechanism is set to 'userpass' , but no "
-                    "'passwords' key found in pillar for this "
-                    "proxy."
-                )
+            if 'passwords' not in proxy_conf and len(proxy_conf['passwords']) > 0:
+                log.critical("Mechanism is set to 'userpass' , but no 'passwords' key found in pillar for this proxy.")
                 return False
-            for key in ("username", "passwords"):
+            for key in ('username', 'passwords'):
                 DETAILS[key] = proxy_conf[key]
-        elif mechanism == "sspi":
-            if "domain" not in proxy_conf:
-                log.critical(
-                    "Mechanism is set to 'sspi' , but no "
-                    "'domain' key found in pillar for this proxy."
-                )
+        elif mechanism == 'sspi':
+            if 'domain' not in proxy_conf:
+                log.critical("Mechanism is set to 'sspi' , but no 'domain' key found in pillar for this proxy.")
                 return False
-            if "principal" not in proxy_conf:
-                log.critical(
-                    "Mechanism is set to 'sspi' , but no "
-                    "'principal' key found in pillar for this "
-                    "proxy."
-                )
+            if 'principal' not in proxy_conf:
+                log.critical("Mechanism is set to 'sspi' , but no 'principal' key found in pillar for this proxy.")
                 return False
-            for key in ("domain", "principal"):
+            for key in ('domain', 'principal'):
                 DETAILS[key] = proxy_conf[key]
-
-        if mechanism == "userpass":
-            # Get the correct login details
-            log.debug(
-                "Retrieving credentials and testing vCenter connection"
-                " for mehchanism 'userpass'"
-            )
+        if mechanism == 'userpass':
+            log.debug("Retrieving credentials and testing vCenter connection for mehchanism 'userpass'")
             try:
-                username, password = find_credentials(DETAILS["vcenter"])
-                DETAILS["password"] = password
+                log.info('Trace')
+                (username, password) = find_credentials(DETAILS['vcenter'])
+                DETAILS['password'] = password
             except SaltSystemExit as err:
-                log.critical("Error: %s", err)
+                log.critical('Error: %s', err)
                 return False
-
-    # Save optional
-    DETAILS["protocol"] = proxy_conf.get("protocol", "https")
-    DETAILS["port"] = proxy_conf.get("port", "443")
-    DETAILS["credstore"] = proxy_conf.get("credstore")
-
+    DETAILS['protocol'] = proxy_conf.get('protocol', 'https')
+    DETAILS['port'] = proxy_conf.get('port', '443')
+    DETAILS['credstore'] = proxy_conf.get('credstore')
 
 def grains():
     """
     Get the grains from the proxy device.
     """
     if not GRAINS_CACHE:
-        return _grains(DETAILS["host"], DETAILS["protocol"], DETAILS["port"])
+        return _grains(DETAILS['host'], DETAILS['protocol'], DETAILS['port'])
     return GRAINS_CACHE
-
 
 def grains_refresh():
     """
@@ -436,44 +392,27 @@ def grains_refresh():
     GRAINS_CACHE = {}
     return grains()
 
-
 def ping():
-    """
-    Returns True if connection is to be done via a vCenter (no connection is attempted).
-    Check to see if the host is responding when connecting directly via an ESXi
-    host.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt esxi-host test.ping
-    """
-    if DETAILS.get("esxi_host"):
+    log.info('Trace')
+    '\n    Returns True if connection is to be done via a vCenter (no connection is attempted).\n    Check to see if the host is responding when connecting directly via an ESXi\n    host.\n\n    CLI Example:\n\n    .. code-block:: bash\n\n        salt esxi-host test.ping\n    '
+    if DETAILS.get('esxi_host'):
         return True
-    else:
-        # TODO Check connection if mechanism is SSPI
-        if DETAILS["mechanism"] == "userpass":
-            find_credentials(DETAILS["host"])
-            try:
-                __salt__["vsphere.system_info"](
-                    host=DETAILS["host"],
-                    username=DETAILS["username"],
-                    password=DETAILS["password"],
-                )
-            except SaltSystemExit as err:
-                log.warning(err)
-                return False
+    elif DETAILS['mechanism'] == 'userpass':
+        find_credentials(DETAILS['host'])
+        try:
+            log.info('Trace')
+            __salt__['vsphere.system_info'](host=DETAILS['host'], username=DETAILS['username'], password=DETAILS['password'])
+        except SaltSystemExit as err:
+            log.warning(err)
+            return False
     return True
-
 
 def shutdown():
     """
     Shutdown the connection to the proxy device. For this proxy,
     shutdown is a no-op.
     """
-    log.debug("ESXi proxy shutdown() called...")
-
+    log.debug('ESXi proxy shutdown() called...')
 
 def ch_config(cmd, *args, **kwargs):
     """
@@ -493,67 +432,50 @@ def ch_config(cmd, *args, **kwargs):
         Keyword arguments that need to be passed to that command.
 
     """
-    # Strip the __pub_ keys...is there a better way to do this?
     for k in kwargs:
-        if k.startswith("__pub_"):
+        if k.startswith('__pub_'):
             kwargs.pop(k)
-
-    kwargs["host"] = DETAILS["host"]
-    kwargs["username"] = DETAILS["username"]
-    kwargs["password"] = DETAILS["password"]
-    kwargs["port"] = DETAILS["port"]
-    kwargs["protocol"] = DETAILS["protocol"]
-    kwargs["credstore"] = DETAILS["credstore"]
-
-    if "vsphere." + cmd not in __salt__:
-        return {"retcode": -1, "message": "vsphere." + cmd + " is not available."}
+    kwargs['host'] = DETAILS['host']
+    kwargs['username'] = DETAILS['username']
+    kwargs['password'] = DETAILS['password']
+    kwargs['port'] = DETAILS['port']
+    kwargs['protocol'] = DETAILS['protocol']
+    kwargs['credstore'] = DETAILS['credstore']
+    if 'vsphere.' + cmd not in __salt__:
+        return {'retcode': -1, 'message': 'vsphere.' + cmd + ' is not available.'}
     else:
-        return __salt__["vsphere." + cmd](*args, **kwargs)
-
+        return __salt__['vsphere.' + cmd](*args, **kwargs)
 
 def find_credentials(host):
-    """
-    Cycle through all the possible credentials and return the first one that
-    works.
-    """
-    user_names = [__pillar__["proxy"].get("username", "root")]
-    passwords = __pillar__["proxy"]["passwords"]
+    log.info('Trace')
+    '\n    Cycle through all the possible credentials and return the first one that\n    works.\n    '
+    user_names = [__pillar__['proxy'].get('username', 'root')]
+    passwords = __pillar__['proxy']['passwords']
     for user in user_names:
         for password in passwords:
             try:
-                # Try to authenticate with the given user/password combination
-                ret = __salt__["vsphere.system_info"](
-                    host=host, username=user, password=password
-                )
+                log.info('Trace')
+                ret = __salt__['vsphere.system_info'](host=host, username=user, password=password)
             except SaltSystemExit:
-                # If we can't authenticate, continue on to try the next password.
+                log.info('Trace')
                 continue
-            # If we have data returned from above, we've successfully authenticated.
             if ret:
-                DETAILS["username"] = user
-                DETAILS["password"] = password
-                return user, password
-    # We've reached the end of the list without successfully authenticating.
-    raise SaltSystemExit(
-        "Cannot complete login due to an incorrect user name or password."
-    )
-
+                DETAILS['username'] = user
+                DETAILS['password'] = password
+                return (user, password)
+    raise SaltSystemExit('Cannot complete login due to an incorrect user name or password.')
 
 def _grains(host, protocol=None, port=None):
     """
     Helper function to the grains from the proxied device.
     """
-    username, password = find_credentials(DETAILS["host"])
-    ret = __salt__["vsphere.system_info"](
-        host=host, username=username, password=password, protocol=protocol, port=port
-    )
+    (username, password) = find_credentials(DETAILS['host'])
+    ret = __salt__['vsphere.system_info'](host=host, username=username, password=password, protocol=protocol, port=port)
     GRAINS_CACHE.update(ret)
     return GRAINS_CACHE
 
-
 def is_connected_via_vcenter():
-    return True if "vcenter" in DETAILS else False
-
+    return True if 'vcenter' in DETAILS else False
 
 def get_details():
     """

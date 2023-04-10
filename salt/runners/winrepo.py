@@ -1,14 +1,8 @@
 """
 Runner to manage Windows software repo
 """
-
-# WARNING: Any modules imported here must also be added to
-# salt/modules/win_repo.py
-
-
 import logging
 import os
-
 import salt.loader
 import salt.minion
 import salt.template
@@ -17,103 +11,56 @@ import salt.utils.gitfs
 import salt.utils.msgpack
 import salt.utils.path
 from salt.exceptions import CommandExecutionError, SaltRenderError
-
 log = logging.getLogger(__name__)
-
-# Global parameters which can be overridden on a per-remote basis
-PER_REMOTE_OVERRIDES = ("ssl_verify", "refspecs", "fallback")
-
-# Fall back to default per-remote-only. This isn't technically needed since
-# salt.utils.gitfs.GitBase.__init__ will default to
-# salt.utils.gitfs.PER_REMOTE_ONLY for this value, so this is mainly for
-# runners and other modules that import salt.runners.winrepo.
+PER_REMOTE_OVERRIDES = ('ssl_verify', 'refspecs', 'fallback')
 PER_REMOTE_ONLY = salt.utils.gitfs.PER_REMOTE_ONLY
-GLOBAL_ONLY = ("branch",)
-
+GLOBAL_ONLY = ('branch',)
 
 def genrepo(opts=None, fire_event=True):
-    """
-    Generate winrepo_cachefile based on sls files in the winrepo_dir
-
-    opts
-        Specify an alternate opts dict. Should not be used unless this function
-        is imported into an execution module.
-
-    fire_event : True
-        Fire an event on failure. Only supported on the master.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run winrepo.genrepo
-    """
+    log.info('Trace')
+    '\n    Generate winrepo_cachefile based on sls files in the winrepo_dir\n\n    opts\n        Specify an alternate opts dict. Should not be used unless this function\n        is imported into an execution module.\n\n    fire_event : True\n        Fire an event on failure. Only supported on the master.\n\n    CLI Example:\n\n    .. code-block:: bash\n\n        salt-run winrepo.genrepo\n    '
     if opts is None:
         opts = __opts__
-
-    winrepo_dir = opts["winrepo_dir"]
-    winrepo_cachefile = opts["winrepo_cachefile"]
-
+    winrepo_dir = opts['winrepo_dir']
+    winrepo_cachefile = opts['winrepo_cachefile']
     ret = {}
     if not os.path.exists(winrepo_dir):
         os.makedirs(winrepo_dir)
     renderers = salt.loader.render(opts, __salt__)
-    for root, _, files in salt.utils.path.os_walk(winrepo_dir):
+    for (root, _, files) in salt.utils.path.os_walk(winrepo_dir):
         for name in files:
-            if name.endswith(".sls"):
+            if name.endswith('.sls'):
                 try:
-                    config = salt.template.compile_template(
-                        os.path.join(root, name),
-                        renderers,
-                        opts["renderer"],
-                        opts["renderer_blacklist"],
-                        opts["renderer_whitelist"],
-                    )
+                    log.info('Trace')
+                    config = salt.template.compile_template(os.path.join(root, name), renderers, opts['renderer'], opts['renderer_blacklist'], opts['renderer_whitelist'])
                 except SaltRenderError as exc:
-                    log.debug("Failed to render %s.", os.path.join(root, name))
-                    log.debug("Error: %s.", exc)
+                    log.debug('Failed to render %s.', os.path.join(root, name))
+                    log.debug('Error: %s.', exc)
                     continue
                 if config:
+                    log.info('Trace')
                     revmap = {}
-                    for pkgname, versions in config.items():
+                    for (pkgname, versions) in config.items():
                         log.debug("Compiling winrepo data for package '%s'", pkgname)
-                        for version, repodata in versions.items():
-                            log.debug(
-                                "Compiling winrepo data for %s version %s",
-                                pkgname,
-                                version,
-                            )
+                        for (version, repodata) in versions.items():
+                            log.debug('Compiling winrepo data for %s version %s', pkgname, version)
                             if not isinstance(version, str):
-                                config[pkgname][str(version)] = config[pkgname].pop(
-                                    version
-                                )
+                                config[pkgname][str(version)] = config[pkgname].pop(version)
                             if not isinstance(repodata, dict):
-                                msg = "Failed to compile {}.".format(
-                                    os.path.join(root, name)
-                                )
+                                msg = 'Failed to compile {}.'.format(os.path.join(root, name))
                                 log.debug(msg)
                                 if fire_event:
                                     try:
-                                        __jid_event__.fire_event(
-                                            {"error": msg}, "progress"
-                                        )
+                                        __jid_event__.fire_event({'error': msg}, 'progress')
                                     except NameError:
-                                        log.error(
-                                            "Attempted to fire the an event "
-                                            "with the following error, but "
-                                            "event firing is not supported: %s",
-                                            msg,
-                                        )
+                                        log.error('Attempted to fire the an event with the following error, but event firing is not supported: %s', msg)
                                 continue
-                            revmap[repodata["full_name"]] = pkgname
-                    ret.setdefault("repo", {}).update(config)
-                    ret.setdefault("name_map", {}).update(revmap)
-    with salt.utils.files.fopen(
-        os.path.join(winrepo_dir, winrepo_cachefile), "w+b"
-    ) as repo:
+                            revmap[repodata['full_name']] = pkgname
+                    ret.setdefault('repo', {}).update(config)
+                    ret.setdefault('name_map', {}).update(revmap)
+    with salt.utils.files.fopen(os.path.join(winrepo_dir, winrepo_cachefile), 'w+b') as repo:
         repo.write(salt.utils.msgpack.dumps(ret))
     return ret
-
 
 def update_git_repos(opts=None, clean=False, masterless=False):
     """
@@ -143,101 +90,50 @@ def update_git_repos(opts=None, clean=False, masterless=False):
     """
     if opts is None:
         opts = __opts__
-
-    winrepo_dir = opts["winrepo_dir"]
-    winrepo_remotes = opts["winrepo_remotes"]
-
-    winrepo_cfg = [
-        (winrepo_remotes, winrepo_dir),
-        (opts["winrepo_remotes_ng"], opts["winrepo_dir_ng"]),
-    ]
-
+    winrepo_dir = opts['winrepo_dir']
+    winrepo_remotes = opts['winrepo_remotes']
+    winrepo_cfg = [(winrepo_remotes, winrepo_dir), (opts['winrepo_remotes_ng'], opts['winrepo_dir_ng'])]
     ret = {}
-    for remotes, base_dir in winrepo_cfg:
-        if not any(
-            (salt.utils.gitfs.GITPYTHON_VERSION, salt.utils.gitfs.PYGIT2_VERSION)
-        ):
-            # Use legacy code
+    for (remotes, base_dir) in winrepo_cfg:
+        if not any((salt.utils.gitfs.GITPYTHON_VERSION, salt.utils.gitfs.PYGIT2_VERSION)):
             winrepo_result = {}
             for remote_info in remotes:
-                if "/" in remote_info:
-                    targetname = remote_info.split("/")[-1]
+                if '/' in remote_info:
+                    targetname = remote_info.split('/')[-1]
                 else:
                     targetname = remote_info
-                rev = "HEAD"
-                # If a revision is specified, use it.
+                rev = 'HEAD'
                 try:
-                    rev, remote_url = remote_info.strip().split()
+                    (rev, remote_url) = remote_info.strip().split()
                 except ValueError:
                     remote_url = remote_info
-                gittarget = os.path.join(base_dir, targetname).replace(".", "_")
+                gittarget = os.path.join(base_dir, targetname).replace('.', '_')
                 if masterless:
-                    result = __salt__["state.single"](
-                        "git.latest",
-                        name=remote_url,
-                        rev=rev,
-                        branch="winrepo",
-                        target=gittarget,
-                        force_checkout=True,
-                        force_reset=True,
-                    )
+                    result = __salt__['state.single']('git.latest', name=remote_url, rev=rev, branch='winrepo', target=gittarget, force_checkout=True, force_reset=True)
                     if isinstance(result, list):
-                        # Errors were detected
-                        raise CommandExecutionError(
-                            "Failed up update winrepo remotes: {}".format(
-                                "\n".join(result)
-                            )
-                        )
-                    if "name" not in result:
-                        # Highstate output dict, the results are actually nested
-                        # one level down.
+                        raise CommandExecutionError('Failed up update winrepo remotes: {}'.format('\n'.join(result)))
+                    if 'name' not in result:
                         key = next(iter(result))
                         result = result[key]
                 else:
                     mminion = salt.minion.MasterMinion(opts)
-                    result = mminion.functions["state.single"](
-                        "git.latest",
-                        name=remote_url,
-                        rev=rev,
-                        branch="winrepo",
-                        target=gittarget,
-                        force_checkout=True,
-                        force_reset=True,
-                    )
+                    result = mminion.functions['state.single']('git.latest', name=remote_url, rev=rev, branch='winrepo', target=gittarget, force_checkout=True, force_reset=True)
                     if isinstance(result, list):
-                        # Errors were detected
-                        raise CommandExecutionError(
-                            "Failed to update winrepo remotes: {}".format(
-                                "\n".join(result)
-                            )
-                        )
-                    if "name" not in result:
-                        # Highstate output dict, the results are actually nested
-                        # one level down.
+                        raise CommandExecutionError('Failed to update winrepo remotes: {}'.format('\n'.join(result)))
+                    if 'name' not in result:
                         key = next(iter(result))
                         result = result[key]
-                winrepo_result[result["name"]] = result["result"]
+                winrepo_result[result['name']] = result['result']
             ret.update(winrepo_result)
         else:
-            # New winrepo code utilizing salt.utils.gitfs
             try:
-                winrepo = salt.utils.gitfs.WinRepo(
-                    opts,
-                    remotes,
-                    per_remote_overrides=PER_REMOTE_OVERRIDES,
-                    per_remote_only=PER_REMOTE_ONLY,
-                    global_only=GLOBAL_ONLY,
-                    cache_root=base_dir,
-                )
+                winrepo = salt.utils.gitfs.WinRepo(opts, remotes, per_remote_overrides=PER_REMOTE_OVERRIDES, per_remote_only=PER_REMOTE_ONLY, global_only=GLOBAL_ONLY, cache_root=base_dir)
                 winrepo.fetch_remotes()
-                # Since we're not running update(), we need to manually call
-                # clear_old_remotes() to remove directories from remotes that
-                # have been removed from configuration.
                 if clean:
                     winrepo.clear_old_remotes()
                 winrepo.checkout()
-            except Exception as exc:  # pylint: disable=broad-except
-                msg = "Failed to update winrepo_remotes: {}".format(exc)
+            except Exception as exc:
+                msg = 'Failed to update winrepo_remotes: {}'.format(exc)
                 log.error(msg, exc_info_on_loglevel=logging.DEBUG)
                 return msg
             ret.update(winrepo.winrepo_dirs)

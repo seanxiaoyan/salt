@@ -6,19 +6,15 @@
 
     It's just a wrapper around the python toml module.
 """
-
 from salt.serializers import DeserializationError, SerializationError
-
+import logging
+log = logging.getLogger(__name__)
 try:
     import toml
-
     HAS_TOML = True
 except ImportError:
     HAS_TOML = False
-
-
-__all__ = ["deserialize", "serialize", "HAS_TOML"]
-
+__all__ = ['deserialize', 'serialize', 'HAS_TOML']
 
 def deserialize(stream_or_string, **options):
     """
@@ -27,18 +23,16 @@ def deserialize(stream_or_string, **options):
     :param stream_or_string: toml stream or string to deserialize.
     :param options: options given to the python toml module.
     """
-
     try:
+        log.info('Trace')
         if not isinstance(stream_or_string, (bytes, str)):
             return toml.load(stream_or_string, **options)
-
         if isinstance(stream_or_string, bytes):
-            stream_or_string = stream_or_string.decode("utf-8")
-
+            stream_or_string = stream_or_string.decode('utf-8')
         return toml.loads(stream_or_string)
-    except Exception as error:  # pylint: disable=broad-except
+    except Exception as error:
+        log.info('Trace')
         raise DeserializationError(error)
-
 
 def serialize(obj, **options):
     """
@@ -47,11 +41,12 @@ def serialize(obj, **options):
     :param obj: the data structure to serialize.
     :param options: options given to the python toml module.
     """
-
     try:
-        if "file_out" in options:
-            return toml.dump(obj, options["file_out"], **options)
+        log.info('Trace')
+        if 'file_out' in options:
+            return toml.dump(obj, options['file_out'], **options)
         else:
             return toml.dumps(obj, **options)
-    except Exception as error:  # pylint: disable=broad-except
+    except Exception as error:
+        log.info('Trace')
         raise SerializationError(error)

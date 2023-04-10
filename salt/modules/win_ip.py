@@ -1,21 +1,14 @@
 """
 The networking module for Windows based systems
 """
-
 import logging
 import time
-
 import salt.utils.network
 import salt.utils.platform
 import salt.utils.validate.net
 from salt.exceptions import CommandExecutionError, SaltInvocationError
-
-# Set up logging
 log = logging.getLogger(__name__)
-
-# Define the module's virtual name
-__virtualname__ = "ip"
-
+__virtualname__ = 'ip'
 
 def __virtual__():
     """
@@ -23,64 +16,52 @@ def __virtual__():
     """
     if salt.utils.platform.is_windows():
         return __virtualname__
-    return (False, "Module win_ip: module only works on Windows systems")
-
+    return (False, 'Module win_ip: module only works on Windows systems')
 
 def _interface_configs():
     """
     Return all interface configs
     """
-    cmd = ["netsh", "interface", "ip", "show", "config"]
-    lines = __salt__["cmd.run"](cmd, python_shell=False).splitlines()
+    cmd = ['netsh', 'interface', 'ip', 'show', 'config']
+    lines = __salt__['cmd.run'](cmd, python_shell=False).splitlines()
     ret = {}
     current_iface = None
     current_ip_list = None
-
     for line in lines:
-
         line = line.strip()
         if not line:
             current_iface = None
             current_ip_list = None
             continue
-
-        if "Configuration for interface" in line:
-            _, iface = line.rstrip('"').split('"', 1)  # get iface name
+        if 'Configuration for interface' in line:
+            (_, iface) = line.rstrip('"').split('"', 1)
             current_iface = {}
             ret[iface] = current_iface
             continue
-
-        if ":" not in line:
+        if ':' not in line:
             if current_ip_list:
                 current_ip_list.append(line)
             else:
                 log.warning('Cannot parse "%s"', line)
             continue
-
-        key, val = line.split(":", 1)
+        (key, val) = line.split(':', 1)
         key = key.strip()
         val = val.strip()
-
         lkey = key.lower()
-        if ("dns servers" in lkey) or ("wins servers" in lkey):
+        if 'dns servers' in lkey or 'wins servers' in lkey:
             current_ip_list = []
             current_iface[key] = current_ip_list
             current_ip_list.append(val)
-
-        elif "ip address" in lkey:
-            current_iface.setdefault("ip_addrs", []).append({key: val})
-
-        elif "subnet prefix" in lkey:
-            subnet, _, netmask = val.split(" ", 2)
-            last_ip = current_iface["ip_addrs"][-1]
-            last_ip["Subnet"] = subnet.strip()
-            last_ip["Netmask"] = netmask.lstrip().rstrip(")")
-
+        elif 'ip address' in lkey:
+            current_iface.setdefault('ip_addrs', []).append({key: val})
+        elif 'subnet prefix' in lkey:
+            (subnet, _, netmask) = val.split(' ', 2)
+            last_ip = current_iface['ip_addrs'][-1]
+            last_ip['Subnet'] = subnet.strip()
+            last_ip['Netmask'] = netmask.lstrip().rstrip(')')
         else:
             current_iface[key] = val
-
     return ret
-
 
 def raw_interface_configs():
     """
@@ -92,9 +73,8 @@ def raw_interface_configs():
 
         salt -G 'os_family:Windows' ip.raw_interface_configs
     """
-    cmd = ["netsh", "interface", "ip", "show", "config"]
-    return __salt__["cmd.run"](cmd, python_shell=False)
-
+    cmd = ['netsh', 'interface', 'ip', 'show', 'config']
+    return __salt__['cmd.run'](cmd, python_shell=False)
 
 def get_all_interfaces():
     """
@@ -108,7 +88,6 @@ def get_all_interfaces():
     """
     return _interface_configs()
 
-
 def get_interface(iface):
     """
     Return the configuration of a network interface
@@ -121,7 +100,6 @@ def get_interface(iface):
     """
     return _interface_configs().get(iface, {})
 
-
 def is_enabled(iface):
     """
     Returns ``True`` if interface is enabled, otherwise ``False``
@@ -132,16 +110,15 @@ def is_enabled(iface):
 
         salt -G 'os_family:Windows' ip.is_enabled 'Local Area Connection #2'
     """
-    cmd = ["netsh", "interface", "show", "interface", "name={}".format(iface)]
+    cmd = ['netsh', 'interface', 'show', 'interface', 'name={}'.format(iface)]
     iface_found = False
-    for line in __salt__["cmd.run"](cmd, python_shell=False).splitlines():
-        if "Connect state:" in line:
+    for line in __salt__['cmd.run'](cmd, python_shell=False).splitlines():
+        if 'Connect state:' in line:
             iface_found = True
-            return line.split()[-1] == "Connected"
+            return line.split()[-1] == 'Connected'
     if not iface_found:
         raise CommandExecutionError("Interface '{}' not found".format(iface))
     return False
-
 
 def is_disabled(iface):
     """
@@ -155,7 +132,6 @@ def is_disabled(iface):
     """
     return not is_enabled(iface)
 
-
 def enable(iface):
     """
     Enable an interface
@@ -168,17 +144,9 @@ def enable(iface):
     """
     if is_enabled(iface):
         return True
-    cmd = [
-        "netsh",
-        "interface",
-        "set",
-        "interface",
-        "name={}".format(iface),
-        "admin=ENABLED",
-    ]
-    __salt__["cmd.run"](cmd, python_shell=False)
+    cmd = ['netsh', 'interface', 'set', 'interface', 'name={}'.format(iface), 'admin=ENABLED']
+    __salt__['cmd.run'](cmd, python_shell=False)
     return is_enabled(iface)
-
 
 def disable(iface):
     """
@@ -192,17 +160,9 @@ def disable(iface):
     """
     if is_disabled(iface):
         return True
-    cmd = [
-        "netsh",
-        "interface",
-        "set",
-        "interface",
-        "name={}".format(iface),
-        "admin=DISABLED",
-    ]
-    __salt__["cmd.run"](cmd, python_shell=False)
+    cmd = ['netsh', 'interface', 'set', 'interface', 'name={}'.format(iface), 'admin=DISABLED']
+    __salt__['cmd.run'](cmd, python_shell=False)
     return is_disabled(iface)
-
 
 def get_subnet_length(mask):
     """
@@ -217,7 +177,6 @@ def get_subnet_length(mask):
     if not salt.utils.validate.net.netmask(mask):
         raise SaltInvocationError("'{}' is not a valid netmask".format(mask))
     return salt.utils.network.get_net_size(mask)
-
 
 def set_static_ip(iface, addr, gateway=None, append=False):
     """
@@ -248,56 +207,43 @@ def set_static_ip(iface, addr, gateway=None, append=False):
     """
 
     def _find_addr(iface, addr, timeout=1):
-        ip, cidr = addr.rsplit("/", 1)
+        (ip, cidr) = addr.rsplit('/', 1)
         netmask = salt.utils.network.cidr_to_ipv4_netmask(cidr)
         for idx in range(timeout):
-            for addrinfo in get_interface(iface).get("ip_addrs", []):
-                if addrinfo["IP Address"] == ip and addrinfo["Netmask"] == netmask:
+            for addrinfo in get_interface(iface).get('ip_addrs', []):
+                if addrinfo['IP Address'] == ip and addrinfo['Netmask'] == netmask:
                     return addrinfo
             time.sleep(1)
         return {}
-
     if not salt.utils.validate.net.ipv4_addr(addr):
         raise SaltInvocationError("Invalid address '{}'".format(addr))
-
-    if gateway and not salt.utils.validate.net.ipv4_addr(addr):
+    if gateway and (not salt.utils.validate.net.ipv4_addr(addr)):
         raise SaltInvocationError("Invalid default gateway '{}'".format(gateway))
-
-    if "/" not in addr:
-        addr += "/32"
-
+    if '/' not in addr:
+        addr += '/32'
     if append and _find_addr(iface, addr):
-        raise CommandExecutionError(
-            "Address '{}' already exists on interface '{}'".format(addr, iface)
-        )
-
-    cmd = ["netsh", "interface", "ip"]
+        raise CommandExecutionError("Address '{}' already exists on interface '{}'".format(addr, iface))
+    cmd = ['netsh', 'interface', 'ip']
     if append:
-        cmd.append("add")
+        cmd.append('add')
     else:
-        cmd.append("set")
-    cmd.extend(["address", "name={}".format(iface)])
+        cmd.append('set')
+    cmd.extend(['address', 'name={}'.format(iface)])
     if not append:
-        cmd.append("source=static")
-    cmd.append("address={}".format(addr))
+        cmd.append('source=static')
+    cmd.append('address={}'.format(addr))
     if gateway:
-        cmd.append("gateway={}".format(gateway))
-
-    result = __salt__["cmd.run_all"](cmd, python_shell=False)
-    if result["retcode"] != 0:
-        raise CommandExecutionError(
-            "Unable to set IP address: {}".format(result["stderr"])
-        )
-
+        cmd.append('gateway={}'.format(gateway))
+    result = __salt__['cmd.run_all'](cmd, python_shell=False)
+    if result['retcode'] != 0:
+        raise CommandExecutionError('Unable to set IP address: {}'.format(result['stderr']))
     new_addr = _find_addr(iface, addr, timeout=10)
     if not new_addr:
         return {}
-
-    ret = {"Address Info": new_addr}
+    ret = {'Address Info': new_addr}
     if gateway:
-        ret["Default Gateway"] = gateway
+        ret['Default Gateway'] = gateway
     return ret
-
 
 def set_dhcp_ip(iface):
     """
@@ -309,10 +255,9 @@ def set_dhcp_ip(iface):
 
         salt -G 'os_family:Windows' ip.set_dhcp_ip 'Local Area Connection'
     """
-    cmd = ["netsh", "interface", "ip", "set", "address", iface, "dhcp"]
-    __salt__["cmd.run"](cmd, python_shell=False)
-    return {"Interface": iface, "DHCP enabled": "Yes"}
-
+    cmd = ['netsh', 'interface', 'ip', 'set', 'address', iface, 'dhcp']
+    __salt__['cmd.run'](cmd, python_shell=False)
+    return {'Interface': iface, 'DHCP enabled': 'Yes'}
 
 def set_static_dns(iface, *addrs):
     """
@@ -337,54 +282,24 @@ def set_static_dns(iface, *addrs):
         salt -G 'os_family:Windows' ip.set_static_dns 'Local Area Connection' '192.168.1.1'
         salt -G 'os_family:Windows' ip.set_static_dns 'Local Area Connection' '192.168.1.252' '192.168.1.253'
     """
-    if not addrs or str(addrs[0]).lower() == "none":
-        return {"Interface": iface, "DNS Server": "No Changes"}
-    # Clear the list of DNS servers if [] is passed
-    if str(addrs[0]).lower() == "[]":
-        log.debug("Clearing list of DNS servers")
-        cmd = [
-            "netsh",
-            "interface",
-            "ip",
-            "set",
-            "dns",
-            "name={}".format(iface),
-            "source=static",
-            "address=none",
-        ]
-        __salt__["cmd.run"](cmd, python_shell=False)
-        return {"Interface": iface, "DNS Server": []}
+    if not addrs or str(addrs[0]).lower() == 'none':
+        return {'Interface': iface, 'DNS Server': 'No Changes'}
+    if str(addrs[0]).lower() == '[]':
+        log.debug('Clearing list of DNS servers')
+        cmd = ['netsh', 'interface', 'ip', 'set', 'dns', 'name={}'.format(iface), 'source=static', 'address=none']
+        __salt__['cmd.run'](cmd, python_shell=False)
+        return {'Interface': iface, 'DNS Server': []}
     addr_index = 1
     for addr in addrs:
         if addr_index == 1:
-            cmd = [
-                "netsh",
-                "interface",
-                "ip",
-                "set",
-                "dns",
-                "name={}".format(iface),
-                "source=static",
-                "address={}".format(addr),
-                "register=primary",
-            ]
-            __salt__["cmd.run"](cmd, python_shell=False)
+            cmd = ['netsh', 'interface', 'ip', 'set', 'dns', 'name={}'.format(iface), 'source=static', 'address={}'.format(addr), 'register=primary']
+            __salt__['cmd.run'](cmd, python_shell=False)
             addr_index = addr_index + 1
         else:
-            cmd = [
-                "netsh",
-                "interface",
-                "ip",
-                "add",
-                "dns",
-                "name={}".format(iface),
-                "address={}".format(addr),
-                "index={}".format(addr_index),
-            ]
-            __salt__["cmd.run"](cmd, python_shell=False)
+            cmd = ['netsh', 'interface', 'ip', 'add', 'dns', 'name={}'.format(iface), 'address={}'.format(addr), 'index={}'.format(addr_index)]
+            __salt__['cmd.run'](cmd, python_shell=False)
             addr_index = addr_index + 1
-    return {"Interface": iface, "DNS Server": addrs}
-
+    return {'Interface': iface, 'DNS Server': addrs}
 
 def set_dhcp_dns(iface):
     """
@@ -396,10 +311,9 @@ def set_dhcp_dns(iface):
 
         salt -G 'os_family:Windows' ip.set_dhcp_dns 'Local Area Connection'
     """
-    cmd = ["netsh", "interface", "ip", "set", "dns", iface, "dhcp"]
-    __salt__["cmd.run"](cmd, python_shell=False)
-    return {"Interface": iface, "DNS Server": "DHCP"}
-
+    cmd = ['netsh', 'interface', 'ip', 'set', 'dns', iface, 'dhcp']
+    __salt__['cmd.run'](cmd, python_shell=False)
+    return {'Interface': iface, 'DNS Server': 'DHCP'}
 
 def set_dhcp_all(iface):
     """
@@ -413,8 +327,7 @@ def set_dhcp_all(iface):
     """
     set_dhcp_ip(iface)
     set_dhcp_dns(iface)
-    return {"Interface": iface, "DNS Server": "DHCP", "DHCP enabled": "Yes"}
-
+    return {'Interface': iface, 'DNS Server': 'DHCP', 'DHCP enabled': 'Yes'}
 
 def get_default_gateway():
     """
@@ -427,14 +340,8 @@ def get_default_gateway():
         salt -G 'os_family:Windows' ip.get_default_gateway
     """
     try:
-        return next(
-            iter(
-                x.split()[-1]
-                for x in __salt__["cmd.run"](
-                    ["netsh", "interface", "ip", "show", "config"], python_shell=False
-                ).splitlines()
-                if "Default Gateway:" in x
-            )
-        )
+        log.info('Trace')
+        return next(iter((x.split()[-1] for x in __salt__['cmd.run'](['netsh', 'interface', 'ip', 'show', 'config'], python_shell=False).splitlines() if 'Default Gateway:' in x)))
     except StopIteration:
-        raise CommandExecutionError("Unable to find default gateway")
+        log.info('Trace')
+        raise CommandExecutionError('Unable to find default gateway')

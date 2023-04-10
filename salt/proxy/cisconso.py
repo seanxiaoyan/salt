@@ -170,47 +170,31 @@ responding:
 
     salt <id> test.ping
 """
-
-
 import logging
-
 from salt.exceptions import SaltSystemExit
-
-# This must be present or the Salt loader won't load this module.
-__proxyenabled__ = ["cisconso"]
-
+import logging
+log = logging.getLogger(__name__)
+__proxyenabled__ = ['cisconso']
 try:
     from pynso.client import NSOClient
     from pynso.datastores import DatastoreType
-
     HAS_PYNSO_LIBS = True
 except ImportError:
     HAS_PYNSO_LIBS = False
-
-# Variables are scoped to this module so we can have persistent data
-# across calls to fns in here.
 GRAINS_CACHE = {}
 DETAILS = {}
-
-# Set up logging
 log = logging.getLogger(__file__)
-
-# Define the module's virtual name
-__virtualname__ = "cisconso"
-
+__virtualname__ = 'cisconso'
 
 def __virtual__():
     return HAS_PYNSO_LIBS
 
-
 def init(opts):
-    # Set configuration details
-    DETAILS["host"] = opts["proxy"].get("host")
-    DETAILS["username"] = opts["proxy"].get("username")
-    DETAILS["password"] = opts["proxy"].get("password")
-    DETAILS["use_ssl"] = bool(opts["proxy"].get("use_ssl"))
-    DETAILS["port"] = int(opts["proxy"].get("port"))
-
+    DETAILS['host'] = opts['proxy'].get('host')
+    DETAILS['username'] = opts['proxy'].get('username')
+    DETAILS['password'] = opts['proxy'].get('password')
+    DETAILS['use_ssl'] = bool(opts['proxy'].get('use_ssl'))
+    DETAILS['port'] = int(opts['proxy'].get('port'))
 
 def grains():
     """
@@ -220,16 +204,9 @@ def grains():
         return _grains()
     return GRAINS_CACHE
 
-
 def _get_client():
-    return NSOClient(
-        host=DETAILS["host"],
-        username=DETAILS["username"],
-        password=DETAILS["password"],
-        port=DETAILS["port"],
-        ssl=DETAILS["use_ssl"],
-    )
-
+    log.info('Trace')
+    return NSOClient(host=DETAILS['host'], username=DETAILS['username'], password=DETAILS['password'], port=DETAILS['port'], ssl=DETAILS['use_ssl'])
 
 def ping():
     """
@@ -243,22 +220,20 @@ def ping():
         salt cisco-nso test.ping
     """
     try:
+        log.info('Trace')
         client = _get_client()
         client.info()
     except SaltSystemExit as err:
         log.warning(err)
         return False
-
     return True
-
 
 def shutdown():
     """
     Shutdown the connection to the proxy device. For this proxy,
     shutdown is a no-op.
     """
-    log.debug("Cisco NSO proxy shutdown() called...")
-
+    log.debug('Cisco NSO proxy shutdown() called...')
 
 def get_data(datastore, path):
     """
@@ -282,7 +257,6 @@ def get_data(datastore, path):
     client = _get_client()
     return client.get_datastore_data(datastore, path)
 
-
 def set_data_value(datastore, path, data):
     """
     Get a data entry in a datastore
@@ -304,13 +278,11 @@ def set_data_value(datastore, path, data):
     client = _get_client()
     return client.set_data_value(datastore, path, data)
 
-
 def get_rollbacks():
     """
     Get a list of stored configuration rollbacks
     """
     return _get_client().get_rollbacks()
-
 
 def get_rollback(name):
     """
@@ -323,7 +295,6 @@ def get_rollback(name):
     :return: the contents of the rollback snapshot
     """
     return _get_client().get_rollback(name)
-
 
 def apply_rollback(datastore, name):
     """
@@ -338,13 +309,11 @@ def apply_rollback(datastore, name):
     """
     return _get_client().apply_rollback(datastore, name)
 
-
 def _grains():
     """
     Helper function to the grains from the proxied devices.
     """
     client = _get_client()
-    # This is a collection of the configuration of all running devices under NSO
     ret = client.get_datastore(DatastoreType.RUNNING)
     GRAINS_CACHE.update(ret)
     return GRAINS_CACHE

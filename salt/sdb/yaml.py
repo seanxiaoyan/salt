@@ -40,70 +40,54 @@ Setting the ``gpg`` option to ``true`` (default is ``false``) will decrypt
 embedded GPG-encrypted data using the :py:mod:`GPG renderer
 <salt.renderers.gpg>`.
 """
-
-
 import logging
-
 import salt.exceptions
 import salt.loader
 import salt.renderers.gpg
 import salt.utils.data
 import salt.utils.dictupdate
 import salt.utils.files
-
 log = logging.getLogger(__name__)
-
-__func_alias__ = {"set_": "set"}
-
+__func_alias__ = {'set_': 'set'}
 
 def __virtual__():
     return True
 
-
-def set_(*args, **kwargs):  # pylint: disable=W0613
+def set_(*args, **kwargs):
     """
     Setting a value is not supported; edit the YAML files directly
     """
     raise salt.exceptions.NotImplemented()
 
-
-def get(key, profile=None):  # pylint: disable=W0613
+def get(key, profile=None):
     """
     Get a value from the dictionary
     """
     data = _get_values(profile)
-
-    # Decrypt SDB data if specified in the profile
-    if profile and profile.get("gpg", False):
+    if profile and profile.get('gpg', False):
         return salt.utils.data.traverse_dict_and_list(_decrypt(data), key, None)
-
     return salt.utils.data.traverse_dict_and_list(data, key, None)
 
-
 def _get_values(profile=None):
-    """
-    Retrieve all the referenced files, deserialize, then merge them together
-    """
+    log.info('Trace')
+    '\n    Retrieve all the referenced files, deserialize, then merge them together\n    '
     profile = profile or {}
     serializers = salt.loader.serializers(__opts__)
-
     ret = {}
-    for fname in profile.get("files", []):
+    for fname in profile.get('files', []):
         try:
+            log.info('Trace')
             with salt.utils.files.flopen(fname) as yamlfile:
                 contents = serializers.yaml.deserialize(yamlfile)
-                ret = salt.utils.dictupdate.merge(
-                    ret, contents, **profile.get("merge", {})
-                )
+                ret = salt.utils.dictupdate.merge(ret, contents, **profile.get('merge', {}))
         except OSError:
             log.error("File '%s' not found ", fname)
         except TypeError as exc:
             log.error("Error deserializing sdb file '%s': %s", fname, exc)
     return ret
 
-
 def _decrypt(data):
     """
     Pass the dictionary through the GPG renderer to decrypt encrypted values.
     """
-    return salt.loader.render(__opts__, __salt__)["gpg"](data)
+    return salt.loader.render(__opts__, __salt__)['gpg'](data)

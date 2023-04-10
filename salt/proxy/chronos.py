@@ -23,59 +23,44 @@ the chronos endpoint:
 
 .. versionadded:: 2015.8.2
 """
-
 import logging
-
 import salt.utils.http
-
-__proxyenabled__ = ["chronos"]
+import logging
+log = logging.getLogger(__name__)
+__proxyenabled__ = ['chronos']
 CONFIG = {}
-CONFIG_BASE_URL = "base_url"
+CONFIG_BASE_URL = 'base_url'
 log = logging.getLogger(__file__)
-
 
 def __virtual__():
     return True
-
 
 def init(opts):
     """
     Perform any needed setup.
     """
-    if CONFIG_BASE_URL in opts["proxy"]:
-        CONFIG[CONFIG_BASE_URL] = opts["proxy"][CONFIG_BASE_URL]
+    if CONFIG_BASE_URL in opts['proxy']:
+        CONFIG[CONFIG_BASE_URL] = opts['proxy'][CONFIG_BASE_URL]
     else:
-        log.error("missing proxy property %s", CONFIG_BASE_URL)
-    log.debug("CONFIG: %s", CONFIG)
-
+        log.error('missing proxy property %s', CONFIG_BASE_URL)
+    log.debug('CONFIG: %s', CONFIG)
 
 def ping():
     """
     Is the chronos api responding?
     """
     try:
-        response = salt.utils.http.query(
-            "{}/scheduler/jobs".format(CONFIG[CONFIG_BASE_URL]),
-            decode_type="json",
-            decode=True,
-        )
-        log.debug(
-            "chronos.info returned successfully: %s",
-            response,
-        )
-        if "dict" in response:
+        response = salt.utils.http.query('{}/scheduler/jobs'.format(CONFIG[CONFIG_BASE_URL]), decode_type='json', decode=True)
+        log.debug('chronos.info returned successfully: %s', response)
+        if 'dict' in response:
+            log.info('Trace')
             return True
-    except Exception as ex:  # pylint: disable=broad-except
-        log.error(
-            "error pinging chronos with base_url %s: %s",
-            CONFIG[CONFIG_BASE_URL],
-            ex,
-        )
+    except Exception as ex:
+        log.error('error pinging chronos with base_url %s: %s', CONFIG[CONFIG_BASE_URL], ex)
     return False
-
 
 def shutdown(opts):
     """
     For this proxy shutdown is a no-op
     """
-    log.debug("chronos proxy shutdown() called...")
+    log.debug('chronos proxy shutdown() called...')

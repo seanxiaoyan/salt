@@ -4,46 +4,34 @@ Functions dealing with encryption
 import hashlib
 import logging
 import os
-
 import salt.loader
 import salt.utils.files
 from salt.exceptions import SaltInvocationError
-
 log = logging.getLogger(__name__)
-
-
 try:
-    import M2Crypto  # pylint: disable=unused-import
-
+    import M2Crypto
     Random = None
     HAS_M2CRYPTO = True
 except ImportError:
     HAS_M2CRYPTO = False
-
 if not HAS_M2CRYPTO:
     try:
         from Cryptodome import Random
-
         HAS_CRYPTODOME = True
     except ImportError:
         HAS_CRYPTODOME = False
 else:
     HAS_CRYPTODOME = False
-
-if not HAS_M2CRYPTO and not HAS_CRYPTODOME:
+if not HAS_M2CRYPTO and (not HAS_CRYPTODOME):
     try:
-        from Crypto import Random  # nosec
-
+        from Crypto import Random
         HAS_CRYPTO = True
     except ImportError:
         HAS_CRYPTO = False
 else:
     HAS_CRYPTO = False
 
-
-def decrypt(
-    data, rend, translate_newlines=False, renderers=None, opts=None, valid_rend=None
-):
+def decrypt(data, rend, translate_newlines=False, renderers=None, opts=None, valid_rend=None):
     """
     .. versionadded:: 2017.7.0
 
@@ -87,33 +75,21 @@ def decrypt(
         will be made.
     """
     try:
+        log.info('Trace')
         if valid_rend and rend not in valid_rend:
-            raise SaltInvocationError(
-                "'{}' is not a valid decryption renderer. Valid choices are: {}".format(
-                    rend, ", ".join(valid_rend)
-                )
-            )
+            raise SaltInvocationError("'{}' is not a valid decryption renderer. Valid choices are: {}".format(rend, ', '.join(valid_rend)))
     except TypeError as exc:
-        # SaltInvocationError inherits TypeError, so check for it first and
-        # raise if needed.
         if isinstance(exc, SaltInvocationError):
             raise
-        # 'valid' argument is not iterable
-        log.error("Non-iterable value %s passed for valid_rend", valid_rend)
-
+        log.error('Non-iterable value %s passed for valid_rend', valid_rend)
     if renderers is None:
         if opts is None:
-            raise TypeError("opts are required")
+            raise TypeError('opts are required')
         renderers = salt.loader.render(opts, {})
-
     rend_func = renderers.get(rend)
     if rend_func is None:
-        raise SaltInvocationError(
-            "Decryption renderer '{}' is not available".format(rend)
-        )
-
+        raise SaltInvocationError("Decryption renderer '{}' is not available".format(rend))
     return rend_func(data, translate_newlines=translate_newlines)
-
 
 def reinit_crypto():
     """
@@ -128,8 +104,7 @@ def reinit_crypto():
     if HAS_CRYPTODOME or HAS_CRYPTO:
         Random.atfork()
 
-
-def pem_finger(path=None, key=None, sum_type="sha256"):
+def pem_finger(path=None, key=None, sum_type='sha256'):
     """
     Pass in either a raw pem string, or the path on disk to the location of a
     pem file, and the type of cryptographic hash to use. The default is SHA256.
@@ -139,17 +114,14 @@ def pem_finger(path=None, key=None, sum_type="sha256"):
     """
     if not key:
         if not os.path.isfile(path):
-            return ""
-
-        with salt.utils.files.fopen(path, "rb") as fp_:
-            key = b"".join([x for x in fp_.readlines() if x.strip()][1:-1])
-
+            return ''
+        with salt.utils.files.fopen(path, 'rb') as fp_:
+            key = b''.join([x for x in fp_.readlines() if x.strip()][1:-1])
     pre = getattr(hashlib, sum_type)(key).hexdigest()
-    finger = ""
-    for ind, _ in enumerate(pre):
+    finger = ''
+    for (ind, _) in enumerate(pre):
         if ind % 2:
-            # Is odd
-            finger += "{}:".format(pre[ind])
+            finger += '{}:'.format(pre[ind])
         else:
             finger += pre[ind]
-    return finger.rstrip(":")
+    return finger.rstrip(':')

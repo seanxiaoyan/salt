@@ -1,4 +1,4 @@
-r"""
+"""
 Proxy Minion for Cisco NX-OS Switches
 
 .. versionadded:: 2016.11.0
@@ -89,7 +89,7 @@ Connection SSH Args:
 
         .. code-block:: yaml
 
-            nxos-switch#.*|\(y\/n\)\?.*
+            nxos-switch#.*|\\(y\\/n\\)\\?.*
 
         This should match
 
@@ -160,59 +160,47 @@ the :mod:`salt.modules.nxos<salt.modules.nxos>` execution module.
     `multiprocessing: False`
 
 """
-
 import copy
 import logging
 import multiprocessing
 import re
-
 import salt.utils.nxos
 from salt.exceptions import CommandExecutionError, NxosCliError
 from salt.utils.args import clean_kwargs
 from salt.utils.vt import TerminalException
 from salt.utils.vt_helper import SSHConnection
-
+import logging
+log = logging.getLogger(__name__)
 log = logging.getLogger(__file__)
-
-__proxyenabled__ = ["nxos"]
-__virtualname__ = "nxos"
-
-# Globals used to maintain state for ssh and nxapi proxy minions
-DEVICE_DETAILS = {"grains_cache": {}}
-CONNECTION = "ssh"
-
+__proxyenabled__ = ['nxos']
+__virtualname__ = 'nxos'
+DEVICE_DETAILS = {'grains_cache': {}}
+CONNECTION = 'ssh'
 
 def __virtual__():
     """
     Only return if all the modules are available
     """
-    log.info("nxos proxy __virtual__() called...")
-
+    log.info('nxos proxy __virtual__() called...')
     return __virtualname__
 
-
-# -----------------------------------------------------------------------------
-# Device Connection Connection Agnostic Functions
-# -----------------------------------------------------------------------------
 def init(opts=None):
     """
     Required.
     Initialize device connection using ssh or nxapi connection type.
     """
     global CONNECTION
-    if __opts__.get("proxy").get("connection") is not None:
-        CONNECTION = __opts__.get("proxy").get("connection")
-
-    if CONNECTION == "ssh":
-        log.info("NXOS PROXY: Initialize ssh proxy connection")
+    if __opts__.get('proxy').get('connection') is not None:
+        CONNECTION = __opts__.get('proxy').get('connection')
+    if CONNECTION == 'ssh':
+        log.info('NXOS PROXY: Initialize ssh proxy connection')
         return _init_ssh(opts)
-    elif CONNECTION == "nxapi":
-        log.info("NXOS PROXY: Initialize nxapi proxy connection")
+    elif CONNECTION == 'nxapi':
+        log.info('NXOS PROXY: Initialize nxapi proxy connection')
         return _init_nxapi(opts)
     else:
-        log.error("Unknown Connection Type: %s", CONNECTION)
+        log.error('Unknown Connection Type: %s', CONNECTION)
         return False
-
 
 def initialized():
     """
@@ -220,88 +208,81 @@ def initialized():
     places occur before the proxy can be initialized, return whether the
     init() function has been called.
     """
-    if CONNECTION == "ssh":
+    if CONNECTION == 'ssh':
         return _initialized_ssh()
-    elif CONNECTION == "nxapi":
+    elif CONNECTION == 'nxapi':
         return _initialized_nxapi()
-
 
 def ping():
     """
     Helper function for nxos execution module functions that need to
     ping the nxos device using the proxy minion.
     """
-    if CONNECTION == "ssh":
+    if CONNECTION == 'ssh':
         return _ping_ssh()
-    elif CONNECTION == "nxapi":
+    elif CONNECTION == 'nxapi':
         return _ping_nxapi()
-
 
 def grains():
     """
     Helper function for nxos execution module functions that need to
     retrieve nxos grains using the proxy minion.
     """
-    if not DEVICE_DETAILS["grains_cache"]:
-        data = sendline("show version")
-        if CONNECTION == "nxapi":
+    if not DEVICE_DETAILS['grains_cache']:
+        data = sendline('show version')
+        if CONNECTION == 'nxapi':
             data = data[0]
         ret = salt.utils.nxos.system_info(data)
-        log.debug("System Info: %s", ret)
-        DEVICE_DETAILS["grains_cache"].update(ret["nxos"])
-    return {"nxos": DEVICE_DETAILS["grains_cache"]}
-
+        log.debug('System Info: %s', ret)
+        DEVICE_DETAILS['grains_cache'].update(ret['nxos'])
+    return {'nxos': DEVICE_DETAILS['grains_cache']}
 
 def grains_refresh():
     """
     Helper function for nxos execution module functions that need to
     refresh nxos grains using the proxy minion.
     """
-    DEVICE_DETAILS["grains_cache"] = {}
+    DEVICE_DETAILS['grains_cache'] = {}
     return grains()
-
 
 def shutdown():
     """
     Not supported.  Only used as a place holder to satisfy shutdown function
     requirement.
     """
-    if CONNECTION == "ssh":
+    if CONNECTION == 'ssh':
         return _shutdown_ssh()
-    elif CONNECTION == "nxapi":
+    elif CONNECTION == 'nxapi':
         return _shutdown_nxapi()
 
-
-def sendline(commands, method="cli_show_ascii", **kwargs):
+def sendline(commands, method='cli_show_ascii', **kwargs):
     """
     Helper function for nxos execution module functions that need to
     send commands to an nxos device using the proxy minion.
     """
     try:
-        if CONNECTION == "ssh":
+        if CONNECTION == 'ssh':
             result = _sendline_ssh(commands, **kwargs)
-        elif CONNECTION == "nxapi":
+        elif CONNECTION == 'nxapi':
             result = _nxapi_request(commands, method, **kwargs)
     except (TerminalException, NxosCliError) as e:
         log.error(e)
         raise
     return result
 
-
 def proxy_config(commands, save_config=None):
     """
     Helper function for nxos execution module functions that need to
     configure an nxos device using the proxy minion.
     """
-    COPY_RS = "copy running-config startup-config"
-
+    COPY_RS = 'copy running-config startup-config'
     if save_config is None:
-        save_config = DEVICE_DETAILS.get("save_config", True)
+        save_config = DEVICE_DETAILS.get('save_config', True)
     if not isinstance(commands, list):
         commands = [commands]
     try:
-        if CONNECTION == "ssh":
-            _sendline_ssh("config terminal")
+        if CONNECTION == 'ssh':
+            _sendline_ssh('config terminal')
             prev_cmds = []
             for cmd in commands:
                 prev_cmds.append(cmd)
@@ -310,22 +291,18 @@ def proxy_config(commands, save_config=None):
                 _sendline_ssh(COPY_RS)
             if ret:
                 log.error(prev_cmds)
-        elif CONNECTION == "nxapi":
+        elif CONNECTION == 'nxapi':
             ret = _nxapi_request(commands)
             if save_config:
                 _nxapi_request(COPY_RS)
             for each in ret:
-                if "Failure" in each:
+                if 'Failure' in each:
                     log.error(each)
     except CommandExecutionError as e:
         log.error(e)
         raise
     return [commands, ret]
 
-
-# -----------------------------------------------------------------------------
-# SSH Transport Functions
-# -----------------------------------------------------------------------------
 def _init_ssh(opts=None):
     """
     Open a connection to the NX-OS switch over SSH.
@@ -334,108 +311,76 @@ def _init_ssh(opts=None):
         opts = __opts__
     try:
         this_prompt = None
-        if "prompt_regex" in opts["proxy"]:
-            this_prompt = opts["proxy"]["prompt_regex"]
-        elif "prompt_name" in opts["proxy"]:
-            this_prompt = "{}.*#".format(opts["proxy"]["prompt_name"])
+        if 'prompt_regex' in opts['proxy']:
+            this_prompt = opts['proxy']['prompt_regex']
+        elif 'prompt_name' in opts['proxy']:
+            this_prompt = '{}.*#'.format(opts['proxy']['prompt_name'])
         else:
-            log.warning("nxos proxy configuration does not specify a prompt match.")
-            this_prompt = ".+#$"
-
-        DEVICE_DETAILS[_worker_name()] = SSHConnection(
-            host=opts["proxy"]["host"],
-            username=opts["proxy"]["username"],
-            password=opts["proxy"]["password"],
-            key_accept=opts["proxy"].get("key_accept", False),
-            ssh_args=opts["proxy"].get("ssh_args", ""),
-            prompt=this_prompt,
-        )
-        out, err = DEVICE_DETAILS[_worker_name()].sendline("terminal length 0")
-        log.info("SSH session establised for process %s", _worker_name())
-    except Exception as ex:  # pylint: disable=broad-except
-        log.error("Unable to connect to %s", opts["proxy"]["host"])
-        log.error("Please check the following:\n")
-        log.error(
-            '-- Verify that "feature ssh" is enabled on your NX-OS device: %s',
-            opts["proxy"]["host"],
-        )
-        log.error("-- Exception Generated: %s", ex)
+            log.warning('nxos proxy configuration does not specify a prompt match.')
+            this_prompt = '.+#$'
+        DEVICE_DETAILS[_worker_name()] = SSHConnection(host=opts['proxy']['host'], username=opts['proxy']['username'], password=opts['proxy']['password'], key_accept=opts['proxy'].get('key_accept', False), ssh_args=opts['proxy'].get('ssh_args', ''), prompt=this_prompt)
+        (out, err) = DEVICE_DETAILS[_worker_name()].sendline('terminal length 0')
+        log.info('SSH session establised for process %s', _worker_name())
+    except Exception as ex:
+        log.error('Unable to connect to %s', opts['proxy']['host'])
+        log.error('Please check the following:\n')
+        log.error('-- Verify that "feature ssh" is enabled on your NX-OS device: %s', opts['proxy']['host'])
+        log.error('-- Exception Generated: %s', ex)
         log.error(ex)
         raise
-    DEVICE_DETAILS["initialized"] = True
-    DEVICE_DETAILS["save_config"] = opts["proxy"].get("save_config", True)
-
+    DEVICE_DETAILS['initialized'] = True
+    DEVICE_DETAILS['save_config'] = opts['proxy'].get('save_config', True)
 
 def _initialized_ssh():
-    return DEVICE_DETAILS.get("initialized", False)
-
+    return DEVICE_DETAILS.get('initialized', False)
 
 def _ping_ssh():
     if _worker_name() not in DEVICE_DETAILS:
         try:
             _init_ssh()
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
+            log.info('Trace')
             return False
     try:
+        log.info('Trace')
         return DEVICE_DETAILS[_worker_name()].conn.isalive()
     except TerminalException as e:
         log.error(e)
         return False
 
-
 def _shutdown_ssh():
-    return "Shutdown of ssh proxy minion is not supported"
-
+    return 'Shutdown of ssh proxy minion is not supported'
 
 def _sendline_ssh(commands, timeout=None, **kwargs):
     if isinstance(commands, str):
         commands = [commands]
-    command = " ; ".join(commands)
+    command = ' ; '.join(commands)
     if _ping_ssh() is False:
         _init_ssh()
-    out, err = DEVICE_DETAILS[_worker_name()].sendline(command)
-    _, out = out.split("\n", 1)
-    out, _, _ = out.rpartition("\n")
+    (out, err) = DEVICE_DETAILS[_worker_name()].sendline(command)
+    (_, out) = out.split('\n', 1)
+    (out, _, _) = out.rpartition('\n')
     kwargs = clean_kwargs(**kwargs)
     _parse_output_for_errors(out, command, **kwargs)
     return out
-
 
 def _parse_output_for_errors(data, command, error_pattern=None):
     """
     Helper method to parse command output for error information
     """
-    if re.search("% Invalid", data):
-        raise CommandExecutionError(
-            {
-                "rejected_input": command,
-                "message": "CLI excution error",
-                "code": "400",
-                "cli_error": data.lstrip(),
-            }
-        )
+    if re.search('% Invalid', data):
+        raise CommandExecutionError({'rejected_input': command, 'message': 'CLI excution error', 'code': '400', 'cli_error': data.lstrip()})
     if error_pattern:
         if isinstance(error_pattern, str):
             error_pattern = [error_pattern]
         for re_line in error_pattern:
             if re.search(re_line, data):
-                raise CommandExecutionError(
-                    {
-                        "rejected_input": command,
-                        "message": "CLI excution error",
-                        "code": "400",
-                        "cli_error": data.lstrip(),
-                    }
-                )
-
+                raise CommandExecutionError({'rejected_input': command, 'message': 'CLI excution error', 'code': '400', 'cli_error': data.lstrip()})
 
 def _worker_name():
+    log.info('Trace')
     return multiprocessing.current_process().name
 
-
-# -----------------------------------------------------------------------------
-# NX-API Transport Functions
-# -----------------------------------------------------------------------------
 def _init_nxapi(opts):
     """
     Open a connection to the NX-OS switch over NX-API.
@@ -446,46 +391,36 @@ def _init_nxapi(opts):
     which doesn't come with much overhead and it's sufficient to confirm we are
     indeed able to connect to the NX-API endpoint as configured.
     """
-    proxy_dict = opts.get("proxy", {})
+    proxy_dict = opts.get('proxy', {})
     conn_args = copy.deepcopy(proxy_dict)
-    conn_args.pop("proxytype", None)
+    conn_args.pop('proxytype', None)
     try:
-        rpc_reply = __utils__["nxos.nxapi_request"]("show clock", **conn_args)
-        # Execute a very simple command to confirm we are able to connect properly
-        DEVICE_DETAILS["conn_args"] = conn_args
-        DEVICE_DETAILS["initialized"] = True
-        DEVICE_DETAILS["up"] = True
-        DEVICE_DETAILS["save_config"] = opts["proxy"].get("save_config", True)
+        log.info('Trace')
+        rpc_reply = __utils__['nxos.nxapi_request']('show clock', **conn_args)
+        DEVICE_DETAILS['conn_args'] = conn_args
+        DEVICE_DETAILS['initialized'] = True
+        DEVICE_DETAILS['up'] = True
+        DEVICE_DETAILS['save_config'] = opts['proxy'].get('save_config', True)
     except Exception as ex:
-        log.error("Unable to connect to %s", conn_args["host"])
-        log.error("Please check the following:\n")
-        log.error(
-            '-- Verify that "feature nxapi" is enabled on your NX-OS device: %s',
-            conn_args["host"],
-        )
-        log.error(
-            "-- Verify that nxapi settings on the NX-OS device and proxy minion config"
-            " file match"
-        )
-        log.error("-- Exception Generated: %s", ex)
+        log.error('Unable to connect to %s', conn_args['host'])
+        log.error('Please check the following:\n')
+        log.error('-- Verify that "feature nxapi" is enabled on your NX-OS device: %s', conn_args['host'])
+        log.error('-- Verify that nxapi settings on the NX-OS device and proxy minion config file match')
+        log.error('-- Exception Generated: %s', ex)
         raise
-    log.info("nxapi DEVICE_DETAILS info: %s", DEVICE_DETAILS)
+    log.info('nxapi DEVICE_DETAILS info: %s', DEVICE_DETAILS)
     return True
 
-
 def _initialized_nxapi():
-    return DEVICE_DETAILS.get("initialized", False)
-
+    return DEVICE_DETAILS.get('initialized', False)
 
 def _ping_nxapi():
-    return DEVICE_DETAILS.get("up", False)
-
+    return DEVICE_DETAILS.get('up', False)
 
 def _shutdown_nxapi():
-    return "Shutdown of nxapi proxy minion is not supported"
+    return 'Shutdown of nxapi proxy minion is not supported'
 
-
-def _nxapi_request(commands, method="cli_conf", **kwargs):
+def _nxapi_request(commands, method='cli_conf', **kwargs):
     """
     Executes an nxapi_request request over NX-API.
 
@@ -498,9 +433,9 @@ def _nxapi_request(commands, method="cli_conf", **kwargs):
         ``cli_conf``: Send configuration commands to the device.
         Defaults to ``cli_conf``.
     """
-    if CONNECTION == "ssh":
-        return "_nxapi_request is not available for ssh proxy"
-    conn_args = DEVICE_DETAILS["conn_args"]
+    if CONNECTION == 'ssh':
+        return '_nxapi_request is not available for ssh proxy'
+    conn_args = DEVICE_DETAILS['conn_args']
     conn_args.update(kwargs)
-    data = __utils__["nxos.nxapi_request"](commands, method=method, **conn_args)
+    data = __utils__['nxos.nxapi_request'](commands, method=method, **conn_args)
     return data

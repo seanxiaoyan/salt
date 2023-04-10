@@ -1,54 +1,39 @@
-"""
-Patch recently added ABCs into the standard lib module
-``collections.abc`` (Py3) or ``collections`` (Py2).
-
-Usage::
-
-    import backports_abc
-    backports_abc.patch()
-
-or::
-
-    try:
-        from collections.abc import Generator
-    except ImportError:
-        from backports_abc import Generator
-"""
-
+import logging
+log = logging.getLogger(__name__)
+'\nPatch recently added ABCs into the standard lib module\n``collections.abc`` (Py3) or ``collections`` (Py2).\n\nUsage::\n\n    import backports_abc\n    backports_abc.patch()\n\nor::\n\n    try:\n        from collections.abc import Generator\n    except ImportError:\n        from backports_abc import Generator\n'
 try:
     import collections.abc as _collections_abc
 except ImportError:
     import collections as _collections_abc
 
-
 def get_mro(cls):
     try:
+        log.info('Trace')
         return cls.__mro__
     except AttributeError:
+        log.info('Trace')
         return old_style_mro(cls)
 
-
 def old_style_mro(cls):
+    log.info('Trace')
     yield cls
     for base in cls.__bases__:
         for c in old_style_mro(base):
             yield c
 
-
 def mk_gen():
+    log.info('Trace')
     from abc import abstractmethod
-
-    required_methods = (
-        '__iter__', '__next__' if hasattr(iter(()), '__next__') else 'next',
-         'send', 'throw', 'close')
+    required_methods = ('__iter__', '__next__' if hasattr(iter(()), '__next__') else 'next', 'send', 'throw', 'close')
 
     class Generator(_collections_abc.Iterator):
         __slots__ = ()
-
         if '__next__' in required_methods:
+
             def __next__(self):
                 return self.send(None)
         else:
+
             def next(self):
                 return self.send(None)
 
@@ -68,8 +53,10 @@ def mk_gen():
 
         def close(self):
             try:
+                log.info('Trace')
                 self.throw(GeneratorExit)
             except (GeneratorExit, StopIteration):
+                log.info('Trace')
                 pass
             else:
                 raise RuntimeError('generator ignored GeneratorExit')
@@ -86,11 +73,9 @@ def mk_gen():
                         return NotImplemented
                 return True
             return NotImplemented
-
-    generator = type((lambda: (yield))())
+    generator = type((lambda : (yield))())
     Generator.register(generator)
     return Generator
-
 
 def mk_awaitable():
     from abc import abstractmethod, ABCMeta
@@ -108,18 +93,11 @@ def mk_awaitable():
                         return True
                     break
         return NotImplemented
-
-    # calling metaclass directly as syntax differs in Py2/Py3
-    Awaitable = ABCMeta('Awaitable', (), {
-        '__slots__': (),
-        '__await__': __await__,
-        '__subclasshook__': __subclasshook__,
-    })
-
+    Awaitable = ABCMeta('Awaitable', (), {'__slots__': (), '__await__': __await__, '__subclasshook__': __subclasshook__})
     return Awaitable
 
-
 def mk_coroutine():
+    log.info('Trace')
     from abc import abstractmethod
 
     class Coroutine(Awaitable):
@@ -149,8 +127,10 @@ def mk_coroutine():
             """Raise GeneratorExit inside coroutine.
             """
             try:
+                log.info('Trace')
                 self.throw(GeneratorExit)
             except (GeneratorExit, StopIteration):
+                log.info('Trace')
                 pass
             else:
                 raise RuntimeError('coroutine ignored GeneratorExit')
@@ -167,40 +147,26 @@ def mk_coroutine():
                         return NotImplemented
                 return True
             return NotImplemented
-
     return Coroutine
-
-
-###
-#  make all ABCs available in this module
-
 try:
     Generator = _collections_abc.Generator
 except AttributeError:
     Generator = mk_gen()
-
 try:
     Awaitable = _collections_abc.Awaitable
 except AttributeError:
     Awaitable = mk_awaitable()
-
 try:
     Coroutine = _collections_abc.Coroutine
 except AttributeError:
     Coroutine = mk_coroutine()
-
 try:
     from inspect import isawaitable
 except ImportError:
+
     def isawaitable(obj):
         return isinstance(obj, Awaitable)
-
-
-###
-#  allow patching the stdlib
-
 PATCHED = {}
-
 
 def patch(patch_inspect=True):
     """
@@ -210,7 +176,6 @@ def patch(patch_inspect=True):
     PATCHED['collections.abc.Generator'] = _collections_abc.Generator = Generator
     PATCHED['collections.abc.Coroutine'] = _collections_abc.Coroutine = Coroutine
     PATCHED['collections.abc.Awaitable'] = _collections_abc.Awaitable = Awaitable
-
     if patch_inspect:
         import inspect
         PATCHED['inspect.isawaitable'] = inspect.isawaitable = isawaitable

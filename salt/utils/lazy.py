@@ -1,28 +1,19 @@
 """
 Lazily-evaluated data structures, primarily used by Salt's loader
 """
-
-
 import logging
 from collections.abc import MutableMapping
-
 import salt.exceptions
-
 log = logging.getLogger(__name__)
-
 
 def verify_fun(lazy_obj, fun):
     """
     Check that the function passed really exists
     """
     if not fun:
-        raise salt.exceptions.SaltInvocationError(
-            "Must specify a function to run!\nex: manage.up"
-        )
+        raise salt.exceptions.SaltInvocationError('Must specify a function to run!\nex: manage.up')
     if fun not in lazy_obj:
-        # If the requested function isn't available, lets say why
         raise salt.exceptions.CommandExecutionError(lazy_obj.missing_fun_string(fun))
-
 
 class LazyDict(MutableMapping):
     """
@@ -37,21 +28,16 @@ class LazyDict(MutableMapping):
         self.clear()
 
     def __nonzero__(self):
-        # we are zero if dict is empty and loaded is true
         return bool(self._dict or not self.loaded)
 
     def __bool__(self):
-        # we are zero if dict is empty and loaded is true
         return self.__nonzero__()
 
     def clear(self):
         """
         Clear the dict
         """
-        # create a dict to store loaded values in
-        self._dict = getattr(self, "mod_dict_class", dict)()
-
-        # have we already loded everything?
+        self._dict = getattr(self, 'mod_dict_class', dict)()
         self.loaded = False
 
     def _load(self, key):
@@ -92,22 +78,17 @@ class LazyDict(MutableMapping):
         """
         if self._missing(key):
             raise KeyError(key)
-
-        if key not in self._dict and not self.loaded:
-            # load the item
+        if key not in self._dict and (not self.loaded):
             if self._load(key):
-                log.debug("LazyLoaded %s", key)
+                log.debug('LazyLoaded %s', key)
                 return self._dict[key]
             else:
-                log.debug(
-                    "Could not LazyLoad %s: %s", key, self.missing_fun_string(key)
-                )
+                log.debug('Could not LazyLoad %s: %s', key, self.missing_fun_string(key))
                 raise KeyError(key)
         else:
             return self._dict[key]
 
     def __len__(self):
-        # if not loaded,
         if not self.loaded:
             self._load_all()
         return len(self._dict)

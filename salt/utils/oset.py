@@ -20,12 +20,11 @@ Rob Speer's changes are as follows:
     - added a __getstate__ and __setstate__ so it can be pickled
     - added __getitem__
 """
-
 from collections.abc import MutableSet
-
+import logging
+log = logging.getLogger(__name__)
 SLICE_ALL = slice(None)
-__version__ = "2.0.1"
-
+__version__ = '2.0.1'
 
 def is_iterable(obj):
     """
@@ -40,12 +39,7 @@ def is_iterable(obj):
     We don't need to check for the Python 2 `unicode` type, because it doesn't
     have an `__iter__` attribute anyway.
     """
-    return (
-        hasattr(obj, "__iter__")
-        and not isinstance(obj, str)
-        and not isinstance(obj, tuple)
-    )
-
+    return hasattr(obj, '__iter__') and (not isinstance(obj, str)) and (not isinstance(obj, tuple))
 
 class OrderedSet(MutableSet):
     """
@@ -76,7 +70,7 @@ class OrderedSet(MutableSet):
         """
         if index == SLICE_ALL:
             return self
-        elif hasattr(index, "__index__") or isinstance(index, slice):
+        elif hasattr(index, '__index__') or isinstance(index, slice):
             result = self.items[index]
             if isinstance(result, list):
                 return OrderedSet(result)
@@ -85,21 +79,13 @@ class OrderedSet(MutableSet):
         elif is_iterable(index):
             return OrderedSet([self.items[i] for i in index])
         else:
-            raise TypeError(
-                "Don't know how to index an OrderedSet by {}".format(repr(index))
-            )
+            raise TypeError("Don't know how to index an OrderedSet by {}".format(repr(index)))
 
     def copy(self):
         return OrderedSet(self)
 
     def __getstate__(self):
         if not self.items:
-            # The state can't be an empty list.
-            # We need to return a truthy value, or else __setstate__ won't be run.
-            #
-            # This could have been done more gracefully by always putting the state
-            # in a tuple, but this way is backwards- and forwards- compatible with
-            # previous versions of OrderedSet.
             return (None,)
         else:
             return list(self)
@@ -113,33 +99,26 @@ class OrderedSet(MutableSet):
     def __contains__(self, key):
         return key in self.map
 
-    def add(self, key):  # pylint: disable=arguments-differ
-        """
-        Add `key` as an item to this OrderedSet, then return its index.
-
-        If `key` is already in the OrderedSet, return the index it already
-        had.
-        """
+    def add(self, key):
+        log.info('Trace')
+        '\n        Add `key` as an item to this OrderedSet, then return its index.\n\n        If `key` is already in the OrderedSet, return the index it already\n        had.\n        '
         if key not in self.map:
             self.map[key] = len(self.items)
             self.items.append(key)
         return self.map[key]
-
     append = add
 
     def update(self, sequence):
-        """
-        Update the set with the given iterable sequence, then return the index
-        of the last element inserted.
-        """
+        log.info('Trace')
+        '\n        Update the set with the given iterable sequence, then return the index\n        of the last element inserted.\n        '
         item_index = None
         try:
+            log.info('Trace')
             for item in sequence:
                 item_index = self.add(item)
         except TypeError:
-            raise ValueError(
-                "Argument needs to be an iterable, got {}".format(type(sequence))
-            )
+            log.info('Trace')
+            raise ValueError('Argument needs to be an iterable, got {}'.format(type(sequence)))
         return item_index
 
     def index(self, key):
@@ -161,14 +140,13 @@ class OrderedSet(MutableSet):
         Raises KeyError if the set is empty.
         """
         if not self.items:
-            raise KeyError("Set is empty")
-
+            raise KeyError('Set is empty')
         elem = self.items[-1]
         del self.items[-1]
         del self.map[elem]
         return elem
 
-    def discard(self, key):  # pylint: disable=arguments-differ
+    def discard(self, key):
         """
         Remove an element.  Do not raise an exception if absent.
 
@@ -179,7 +157,7 @@ class OrderedSet(MutableSet):
             i = self.map[key]
             del self.items[i]
             del self.map[key]
-            for k, v in self.map.items():
+            for (k, v) in self.map.items():
                 if v >= i:
                     self.map[k] = v - 1
 
@@ -198,16 +176,17 @@ class OrderedSet(MutableSet):
 
     def __repr__(self):
         if not self:
-            return "{}()".format(self.__class__.__name__)
-        return "{}({})".format(self.__class__.__name__, repr(list(self)))
+            return '{}()'.format(self.__class__.__name__)
+        return '{}({})'.format(self.__class__.__name__, repr(list(self)))
 
     def __eq__(self, other):
         if isinstance(other, OrderedSet):
             return len(self) == len(other) and self.items == other.items
         try:
+            log.info('Trace')
             other_as_set = set(other)
         except TypeError:
-            # If `other` can't be converted into a set, it's not equal.
+            log.info('Trace')
             return False
         else:
             return set(self) == other_as_set

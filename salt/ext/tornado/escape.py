@@ -1,33 +1,14 @@
-#!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
-
 """Escaping/unescaping methods for HTML, JSON, URLs, and others.
 
 Also includes a few other miscellaneous string manipulation functions that
 have crept in over time.
 """
-# pylint: skip-file
-
 from __future__ import absolute_import, division, print_function
-
 import json
 import re
-
 from salt.ext.tornado.util import PY3, unicode_type, basestring_type
-
+import logging
+log = logging.getLogger(__name__)
 if PY3:
     from urllib.parse import parse_qs as _parse_qs
     import html.entities as htmlentitydefs
@@ -37,17 +18,12 @@ else:
     from urlparse import parse_qs as _parse_qs
     import htmlentitydefs
     import urllib as urllib_parse
-
 try:
-    import typing  # noqa
+    import typing
 except ImportError:
     pass
-
-
 _XHTML_ESCAPE_RE = re.compile('[&<>"\']')
-_XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
-                      '\'': '&#39;'}
-
+_XHTML_ESCAPE_DICT = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}
 
 def xhtml_escape(value):
     """Escapes a string so it is valid within HTML or XML.
@@ -60,38 +36,23 @@ def xhtml_escape(value):
 
        Added the single quote to the list of escaped characters.
     """
-    return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)],
-                                to_basestring(value))
-
+    return _XHTML_ESCAPE_RE.sub(lambda match: _XHTML_ESCAPE_DICT[match.group(0)], to_basestring(value))
 
 def xhtml_unescape(value):
     """Un-escapes an XML-escaped string."""
-    return re.sub(r"&(#?)(\w+?);", _convert_entity, _unicode(value))
+    return re.sub('&(#?)(\\w+?);', _convert_entity, _unicode(value))
 
-
-# The fact that json_encode wraps json.dumps is an implementation detail.
-# Please see https://github.com/tornadoweb/tornado/pull/706
-# before sending a pull request that adds **kwargs to this function.
 def json_encode(value):
     """JSON-encodes the given Python object."""
-    # JSON permits but does not require forward slashes to be escaped.
-    # This is useful when json data is emitted in a <script> tag
-    # in HTML, as it prevents </script> tags from prematurely terminating
-    # the javascript.  Some json libraries do this escaping by default,
-    # although python's standard library does not, so we do it here.
-    # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
-    return json.dumps(value).replace("</", "<\\/")
-
+    return json.dumps(value).replace('</', '<\\/')
 
 def json_decode(value):
     """Returns Python objects for the given JSON string."""
     return json.loads(to_basestring(value))
 
-
 def squeeze(value):
     """Replace all sequences of whitespace chars with a single space."""
-    return re.sub(r"[\x00-\x20]+", " ", value).strip()
-
+    return re.sub('[\\x00-\\x20]+', ' ', value).strip()
 
 def url_escape(value, plus=True):
     """Returns a URL-encoded version of the given value.
@@ -106,12 +67,8 @@ def url_escape(value, plus=True):
     """
     quote = urllib_parse.quote_plus if plus else urllib_parse.quote
     return quote(utf8(value))
-
-
-# python 3 changed things around enough that we need two separate
-# implementations of url_unescape.  We also need our own implementation
-# of parse_qs since python 3's version insists on decoding everything.
 if not PY3:
+
     def url_unescape(value, encoding='utf-8', plus=True):
         """Decodes the given value from a URL.
 
@@ -129,14 +86,14 @@ if not PY3:
         .. versionadded:: 3.1
            The ``plus`` argument
         """
-        unquote = (urllib_parse.unquote_plus if plus else urllib_parse.unquote)
+        unquote = urllib_parse.unquote_plus if plus else urllib_parse.unquote
         if encoding is None:
             return unquote(utf8(value))
         else:
             return unicode_type(unquote(utf8(value)), encoding)
-
     parse_qs_bytes = _parse_qs
 else:
+
     def url_unescape(value, encoding='utf-8', plus=True):
         """Decodes the given value from a URL.
 
@@ -156,12 +113,10 @@ else:
         """
         if encoding is None:
             if plus:
-                # unquote_to_bytes doesn't have a _plus variant
                 value = to_basestring(value).replace('+', ' ')
             return urllib_parse.unquote_to_bytes(value)
         else:
-            unquote = (urllib_parse.unquote_plus if plus
-                       else urllib_parse.unquote)
+            unquote = urllib_parse.unquote_plus if plus else urllib_parse.unquote
             return unquote(to_basestring(value), encoding=encoding)
 
     def parse_qs_bytes(qs, keep_blank_values=False, strict_parsing=False):
@@ -172,66 +127,37 @@ else:
         because it's too painful to keep them as byte strings in
         python3 and in practice they're nearly always ascii anyway.
         """
-        # This is gross, but python3 doesn't give us another way.
-        # Latin1 is the universal donor of character encodings.
-        result = _parse_qs(qs, keep_blank_values, strict_parsing,
-                           encoding='latin1', errors='strict')
+        result = _parse_qs(qs, keep_blank_values, strict_parsing, encoding='latin1', errors='strict')
         encoded = {}
-        for k, v in result.items():
+        for (k, v) in result.items():
             encoded[k] = [i.encode('latin1') for i in v]
         return encoded
-
-
 _UTF8_TYPES = (bytes, type(None))
 
-
 def utf8(value):
-    # type: (typing.Union[bytes,unicode_type,None])->typing.Union[bytes,None]
-    """Converts a string argument to a byte string.
-
-    If the argument is already a byte string or None, it is returned unchanged.
-    Otherwise it must be a unicode string and is encoded as utf8.
-    """
+    log.info('Trace')
+    'Converts a string argument to a byte string.\n\n    If the argument is already a byte string or None, it is returned unchanged.\n    Otherwise it must be a unicode string and is encoded as utf8.\n    '
     if isinstance(value, _UTF8_TYPES):
         return value
     if not isinstance(value, unicode_type):
-        raise TypeError(
-            "Expected bytes, unicode, or None; got %r" % type(value)
-        )
-    return value.encode("utf-8")
-
-
+        raise TypeError('Expected bytes, unicode, or None; got %r' % type(value))
+    return value.encode('utf-8')
 _TO_UNICODE_TYPES = (unicode_type, type(None))
 
-
 def to_unicode(value):
-    """Converts a string argument to a unicode string.
-
-    If the argument is already a unicode string or None, it is returned
-    unchanged.  Otherwise it must be a byte string and is decoded as utf8.
-    """
+    log.info('Trace')
+    'Converts a string argument to a unicode string.\n\n    If the argument is already a unicode string or None, it is returned\n    unchanged.  Otherwise it must be a byte string and is decoded as utf8.\n    '
     if isinstance(value, _TO_UNICODE_TYPES):
         return value
     if not isinstance(value, bytes):
-        raise TypeError(
-            "Expected bytes, unicode, or None; got %r" % type(value)
-        )
-    return value.decode("utf-8")
-
-
-# to_unicode was previously named _unicode not because it was private,
-# but to avoid conflicts with the built-in unicode() function/type
+        raise TypeError('Expected bytes, unicode, or None; got %r' % type(value))
+    return value.decode('utf-8')
 _unicode = to_unicode
-
-# When dealing with the standard library across python 2 and 3 it is
-# sometimes useful to have a direct conversion to the native string type
 if str is unicode_type:
     native_str = to_unicode
 else:
     native_str = utf8
-
 _BASESTRING_TYPES = (basestring_type, type(None))
-
 
 def to_basestring(value):
     """Converts a string argument to a subclass of basestring.
@@ -245,11 +171,8 @@ def to_basestring(value):
     if isinstance(value, _BASESTRING_TYPES):
         return value
     if not isinstance(value, bytes):
-        raise TypeError(
-            "Expected bytes, unicode, or None; got %r" % type(value)
-        )
-    return value.decode("utf-8")
-
+        raise TypeError('Expected bytes, unicode, or None; got %r' % type(value))
+    return value.decode('utf-8')
 
 def recursive_unicode(obj):
     """Walks a simple data structure, converting byte strings to unicode.
@@ -257,29 +180,18 @@ def recursive_unicode(obj):
     Supports lists, tuples, and dictionaries.
     """
     if isinstance(obj, dict):
-        return dict((recursive_unicode(k), recursive_unicode(v)) for (k, v) in obj.items())
+        return dict(((recursive_unicode(k), recursive_unicode(v)) for (k, v) in obj.items()))
     elif isinstance(obj, list):
-        return list(recursive_unicode(i) for i in obj)
+        return list((recursive_unicode(i) for i in obj))
     elif isinstance(obj, tuple):
-        return tuple(recursive_unicode(i) for i in obj)
+        return tuple((recursive_unicode(i) for i in obj))
     elif isinstance(obj, bytes):
         return to_unicode(obj)
     else:
         return obj
+_URL_RE = re.compile(to_unicode('\\b((?:([\\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\\s&()]|&amp;|&quot;)*(?:[^!"#$%&\'()*+,.:;<=>?@\\[\\]^`{|}~\\s]))|(?:\\((?:[^\\s&()]|&amp;|&quot;)*\\)))+)'))
 
-
-# I originally used the regex from
-# http://daringfireball.net/2010/07/improved_regex_for_matching_urls
-# but it gets all exponential on certain patterns (such as too many trailing
-# dots), causing the regex matcher to never return.
-# This regex should avoid those problems.
-# Use to_unicode instead of tornado.util.u - we don't want backslashes getting
-# processed as escapes.
-_URL_RE = re.compile(to_unicode(r"""\b((?:([\w-]+):(/{1,3})|www[.])(?:(?:(?:[^\s&()]|&amp;|&quot;)*(?:[^!"#$%&'()*+,.:;<=>?@\[\]^`{|}~\s]))|(?:\((?:[^\s&()]|&amp;|&quot;)*\)))+)"""))
-
-
-def linkify(text, shorten=False, extra_params="",
-            require_protocol=False, permitted_protocols=["http", "https"]):
+def linkify(text, shorten=False, extra_params='', require_protocol=False, permitted_protocols=['http', 'https']):
     """Converts plain text into HTML with links.
 
     For example: ``linkify("Hello http://tornadoweb.org!")`` would return
@@ -309,91 +221,69 @@ def linkify(text, shorten=False, extra_params="",
         "mailto"])``. It is very unsafe to include protocols such as
         ``javascript``.
     """
-    if extra_params and not callable(extra_params):
-        extra_params = " " + extra_params.strip()
+    if extra_params and (not callable(extra_params)):
+        extra_params = ' ' + extra_params.strip()
 
     def make_link(m):
         url = m.group(1)
         proto = m.group(2)
-        if require_protocol and not proto:
-            return url  # not protocol, no linkify
-
+        if require_protocol and (not proto):
+            return url
         if proto and proto not in permitted_protocols:
-            return url  # bad protocol, no linkify
-
+            return url
         href = m.group(1)
         if not proto:
-            href = "http://" + href   # no proto specified, use http
-
+            href = 'http://' + href
         if callable(extra_params):
-            params = " " + extra_params(href).strip()
+            params = ' ' + extra_params(href).strip()
         else:
             params = extra_params
-
-        # clip long urls. max_len is just an approximation
         max_len = 30
         if shorten and len(url) > max_len:
             before_clip = url
             if proto:
-                proto_len = len(proto) + 1 + len(m.group(3) or "")  # +1 for :
+                proto_len = len(proto) + 1 + len(m.group(3) or '')
             else:
                 proto_len = 0
-
-            parts = url[proto_len:].split("/")
+            parts = url[proto_len:].split('/')
             if len(parts) > 1:
-                # Grab the whole host part plus the first bit of the path
-                # The path is usually not that interesting once shortened
-                # (no more slug, etc), so it really just provides a little
-                # extra indication of shortening.
-                url = url[:proto_len] + parts[0] + "/" + \
-                    parts[1][:8].split('?')[0].split('.')[0]
-
-            if len(url) > max_len * 1.5:  # still too long
+                url = url[:proto_len] + parts[0] + '/' + parts[1][:8].split('?')[0].split('.')[0]
+            if len(url) > max_len * 1.5:
                 url = url[:max_len]
-
             if url != before_clip:
                 amp = url.rfind('&')
-                # avoid splitting html char entities
                 if amp > max_len - 5:
                     url = url[:amp]
-                url += "..."
-
+                url += '...'
                 if len(url) >= len(before_clip):
                     url = before_clip
                 else:
-                    # full url is visible on mouse-over (for those who don't
-                    # have a status bar, such as Safari by default)
                     params += ' title="%s"' % href
-
         return u'<a href="%s"%s>%s</a>' % (href, params, url)
-
-    # First HTML-escape so that our strings are all safe.
-    # The regex is modified to avoid character entites other than &amp; so
-    # that we won't pick up &quot;, etc.
     text = _unicode(xhtml_escape(text))
     return _URL_RE.sub(make_link, text)
 
-
 def _convert_entity(m):
-    if m.group(1) == "#":
+    if m.group(1) == '#':
         try:
+            log.info('Trace')
             if m.group(2)[:1].lower() == 'x':
                 return unichr(int(m.group(2)[1:], 16))
             else:
                 return unichr(int(m.group(2)))
         except ValueError:
-            return "&#%s;" % m.group(2)
+            log.info('Trace')
+            return '&#%s;' % m.group(2)
     try:
+        log.info('Trace')
         return _HTML_UNICODE_MAP[m.group(2)]
     except KeyError:
-        return "&%s;" % m.group(2)
-
+        log.info('Trace')
+        return '&%s;' % m.group(2)
 
 def _build_unicode_map():
     unicode_map = {}
-    for name, value in htmlentitydefs.name2codepoint.items():
+    for (name, value) in htmlentitydefs.name2codepoint.items():
         unicode_map[name] = unichr(value)
     return unicode_map
-
-
 _HTML_UNICODE_MAP = _build_unicode_map()

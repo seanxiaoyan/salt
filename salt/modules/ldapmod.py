@@ -38,40 +38,26 @@ Salt interface to LDAP commands
     to the same LDAP server. It's easy enough to override this behavior, but
     badness may ensue - you have been warned.
 """
-
-
 import logging
 import time
-
 import salt.utils.data
 from salt.exceptions import CommandExecutionError
-
+log = logging.getLogger(__name__)
 try:
     import ldap
-    import ldap.modlist  # pylint: disable=no-name-in-module
-
+    import ldap.modlist
     HAS_LDAP = True
 except ImportError:
     HAS_LDAP = False
-
-log = logging.getLogger(__name__)
-
-# Define the module's virtual name
-__virtualname__ = "ldap"
-
+__virtualname__ = 'ldap'
 
 def __virtual__():
     """
     Only load this module if the ldap config is set
     """
-    # These config items must be set in the minion config
     if HAS_LDAP:
         return __virtualname__
-    return (
-        False,
-        "The ldapmod execution module cannot be loaded: ldap config not present.",
-    )
-
+    return (False, 'The ldapmod execution module cannot be loaded: ldap config not present.')
 
 def _config(name, key=None, **kwargs):
     """
@@ -83,37 +69,19 @@ def _config(name, key=None, **kwargs):
     if name in kwargs:
         value = kwargs[name]
     else:
-        value = __salt__["config.option"]("ldap.{}".format(key))
+        value = __salt__['config.option']('ldap.{}'.format(key))
     return salt.utils.data.decode(value, to_str=True)
-
 
 def _connect(**kwargs):
     """
     Instantiate LDAP Connection class and return an LDAP connection object
     """
     connargs = {}
-    for name in [
-        "uri",
-        "server",
-        "port",
-        "tls",
-        "no_verify",
-        "binddn",
-        "bindpw",
-        "anonymous",
-    ]:
+    for name in ['uri', 'server', 'port', 'tls', 'no_verify', 'binddn', 'bindpw', 'anonymous']:
         connargs[name] = _config(name, **kwargs)
-
     return _LDAPConnection(**connargs).ldap
 
-
-def search(
-    filter,  # pylint: disable=C0103
-    dn=None,  # pylint: disable=C0103
-    scope=None,
-    attrs=None,
-    **kwargs
-):
+def search(filter, dn=None, scope=None, attrs=None, **kwargs):
     """
     Run an arbitrary LDAP query and return the results.
 
@@ -143,36 +111,24 @@ def search(
         scope=1 attrs='' server='localhost' port='7393' tls=True bindpw='ssh'
     """
     if not dn:
-        dn = _config("dn", "basedn")  # pylint: disable=C0103
+        dn = _config('dn', 'basedn')
     if not scope:
-        scope = _config("scope")
-    if attrs == "":  # Allow command line 'return all' attr override
+        scope = _config('scope')
+    if attrs == '':
         attrs = None
     elif attrs is None:
-        attrs = _config("attrs")
+        attrs = _config('attrs')
     _ldap = _connect(**kwargs)
     start = time.time()
-    log.debug(
-        "Running LDAP search with filter:%s, dn:%s, scope:%s, attrs:%s",
-        filter,
-        dn,
-        scope,
-        attrs,
-    )
+    log.debug('Running LDAP search with filter:%s, dn:%s, scope:%s, attrs:%s', filter, dn, scope, attrs)
     results = _ldap.search_s(dn, int(scope), filter, attrs)
     elapsed = time.time() - start
-    if elapsed < 0.200:
-        elapsed_h = str(round(elapsed * 1000, 1)) + "ms"
+    if elapsed < 0.2:
+        elapsed_h = str(round(elapsed * 1000, 1)) + 'ms'
     else:
-        elapsed_h = str(round(elapsed, 2)) + "s"
-
-    ret = {
-        "results": results,
-        "count": len(results),
-        "time": {"human": elapsed_h, "raw": str(round(elapsed, 5))},
-    }
+        elapsed_h = str(round(elapsed, 2)) + 's'
+    ret = {'results': results, 'count': len(results), 'time': {'human': elapsed_h, 'raw': str(round(elapsed, 5))}}
     return ret
-
 
 class _LDAPConnection:
     """
@@ -189,26 +145,19 @@ class _LDAPConnection:
         self.tls = tls
         self.binddn = binddn
         self.bindpw = bindpw
-
-        if self.uri == "":
-            self.uri = "ldap://{}:{}".format(self.server, self.port)
-
+        if self.uri == '':
+            self.uri = 'ldap://{}:{}'.format(self.server, self.port)
         try:
+            log.info('Trace')
             if no_verify:
                 ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
-
-            self.ldap = ldap.initialize("{}".format(self.uri))
-            self.ldap.protocol_version = 3  # ldap.VERSION3
-            self.ldap.set_option(ldap.OPT_REFERRALS, 0)  # Needed for AD
-
+            self.ldap = ldap.initialize('{}'.format(self.uri))
+            self.ldap.protocol_version = 3
+            self.ldap.set_option(ldap.OPT_REFERRALS, 0)
             if self.tls:
                 self.ldap.start_tls_s()
-
             if not anonymous:
                 self.ldap.simple_bind_s(self.binddn, self.bindpw)
-        except Exception as ldap_error:  # pylint: disable=broad-except
-            raise CommandExecutionError(
-                "Failed to bind to LDAP server {} as {}: {}".format(
-                    self.uri, self.binddn, ldap_error
-                )
-            )
+        except Exception as ldap_error:
+            log.info('Trace')
+            raise CommandExecutionError('Failed to bind to LDAP server {} as {}: {}'.format(self.uri, self.binddn, ldap_error))

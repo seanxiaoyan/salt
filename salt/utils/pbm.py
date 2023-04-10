@@ -36,28 +36,15 @@ version currently listed in PyPi, run the following:
 
     pip install pyVmomi==5.5.0.2014.1.1
 """
-
-
 import logging
-
 import salt.utils.vmware
-from salt.exceptions import (
-    VMwareApiError,
-    VMwareObjectRetrievalError,
-    VMwareRuntimeError,
-)
-
+from salt.exceptions import VMwareApiError, VMwareObjectRetrievalError, VMwareRuntimeError
+log = logging.getLogger(__name__)
 try:
-    from pyVmomi import pbm, vim, vmodl  # pylint: disable=no-name-in-module
-
+    from pyVmomi import pbm, vim, vmodl
     HAS_PYVMOMI = True
 except ImportError:
     HAS_PYVMOMI = False
-
-
-# Get Logging Started
-log = logging.getLogger(__name__)
-
 
 def __virtual__():
     """
@@ -66,12 +53,7 @@ def __virtual__():
     if HAS_PYVMOMI:
         return True
     else:
-        return (
-            False,
-            "Missing dependency: The salt.utils.pbm module "
-            "requires the pyvmomi library",
-        )
-
+        return (False, 'Missing dependency: The salt.utils.pbm module requires the pyvmomi library')
 
 def get_profile_manager(service_instance):
     """
@@ -80,17 +62,14 @@ def get_profile_manager(service_instance):
     service_instance
         Service instance to the host or vCenter
     """
-    stub = salt.utils.vmware.get_new_service_instance_stub(
-        service_instance, ns="pbm/2.0", path="/pbm/sdk"
-    )
-    pbm_si = pbm.ServiceInstance("ServiceInstance", stub)
+    stub = salt.utils.vmware.get_new_service_instance_stub(service_instance, ns='pbm/2.0', path='/pbm/sdk')
+    pbm_si = pbm.ServiceInstance('ServiceInstance', stub)
     try:
+        log.info('Trace')
         profile_manager = pbm_si.RetrieveContent().profileManager
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)
@@ -98,7 +77,6 @@ def get_profile_manager(service_instance):
         log.exception(exc)
         raise VMwareRuntimeError(exc.msg)
     return profile_manager
-
 
 def get_placement_solver(service_instance):
     """
@@ -107,17 +85,14 @@ def get_placement_solver(service_instance):
     service_instance
         Service instance to the host or vCenter
     """
-    stub = salt.utils.vmware.get_new_service_instance_stub(
-        service_instance, ns="pbm/2.0", path="/pbm/sdk"
-    )
-    pbm_si = pbm.ServiceInstance("ServiceInstance", stub)
+    stub = salt.utils.vmware.get_new_service_instance_stub(service_instance, ns='pbm/2.0', path='/pbm/sdk')
+    pbm_si = pbm.ServiceInstance('ServiceInstance', stub)
     try:
+        log.info('Trace')
         profile_manager = pbm_si.RetrieveContent().placementSolver
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)
@@ -126,7 +101,6 @@ def get_placement_solver(service_instance):
         raise VMwareRuntimeError(exc.msg)
     return profile_manager
 
-
 def get_capability_definitions(profile_manager):
     """
     Returns a list of all capability definitions.
@@ -134,16 +108,13 @@ def get_capability_definitions(profile_manager):
     profile_manager
         Reference to the profile manager.
     """
-    res_type = pbm.profile.ResourceType(
-        resourceType=pbm.profile.ResourceTypeEnum.STORAGE
-    )
+    res_type = pbm.profile.ResourceType(resourceType=pbm.profile.ResourceTypeEnum.STORAGE)
     try:
+        log.info('Trace')
         cap_categories = profile_manager.FetchCapabilityMetadata(res_type)
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)
@@ -154,7 +125,6 @@ def get_capability_definitions(profile_manager):
     for cat in cap_categories:
         cap_definitions.extend(cat.capabilityMetadata)
     return cap_definitions
-
 
 def get_policies_by_id(profile_manager, policy_ids):
     """
@@ -167,19 +137,17 @@ def get_policies_by_id(profile_manager, policy_ids):
         List of policy ids to retrieve.
     """
     try:
+        log.info('Trace')
         return profile_manager.RetrieveContent(policy_ids)
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)
     except vmodl.RuntimeFault as exc:
         log.exception(exc)
         raise VMwareRuntimeError(exc.msg)
-
 
 def get_storage_policies(profile_manager, policy_names=None, get_all_policies=False):
     """
@@ -196,35 +164,26 @@ def get_storage_policies(profile_manager, policy_names=None, get_all_policies=Fa
         Flag specifying to return all policies, regardless of the specified
         filter.
     """
-    res_type = pbm.profile.ResourceType(
-        resourceType=pbm.profile.ResourceTypeEnum.STORAGE
-    )
+    res_type = pbm.profile.ResourceType(resourceType=pbm.profile.ResourceTypeEnum.STORAGE)
     try:
+        log.info('Trace')
         policy_ids = profile_manager.QueryProfile(res_type)
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)
     except vmodl.RuntimeFault as exc:
         log.exception(exc)
         raise VMwareRuntimeError(exc.msg)
-    log.trace("policy_ids = %s", policy_ids)
-    # More policies are returned so we need to filter again
-    policies = [
-        p
-        for p in get_policies_by_id(profile_manager, policy_ids)
-        if p.resourceType.resourceType == pbm.profile.ResourceTypeEnum.STORAGE
-    ]
+    log.trace('policy_ids = %s', policy_ids)
+    policies = [p for p in get_policies_by_id(profile_manager, policy_ids) if p.resourceType.resourceType == pbm.profile.ResourceTypeEnum.STORAGE]
     if get_all_policies:
         return policies
     if not policy_names:
         policy_names = []
     return [p for p in policies if p.name in policy_names]
-
 
 def create_storage_policy(profile_manager, policy_spec):
     """
@@ -237,19 +196,17 @@ def create_storage_policy(profile_manager, policy_spec):
         Policy update spec.
     """
     try:
+        log.info('Trace')
         profile_manager.Create(policy_spec)
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)
     except vmodl.RuntimeFault as exc:
         log.exception(exc)
         raise VMwareRuntimeError(exc.msg)
-
 
 def update_storage_policy(profile_manager, policy, policy_spec):
     """
@@ -265,12 +222,11 @@ def update_storage_policy(profile_manager, policy, policy_spec):
         Policy update spec.
     """
     try:
+        log.info('Trace')
         profile_manager.Update(policy.profileId, policy_spec)
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)
@@ -278,27 +234,17 @@ def update_storage_policy(profile_manager, policy, policy_spec):
         log.exception(exc)
         raise VMwareRuntimeError(exc.msg)
 
-
 def get_default_storage_policy_of_datastore(profile_manager, datastore):
-    """
-    Returns the default storage policy reference assigned to a datastore.
-
-    profile_manager
-        Reference to the profile manager.
-
-    datastore
-        Reference to the datastore.
-    """
-    # Retrieve all datastores visible
-    hub = pbm.placement.PlacementHub(hubId=datastore._moId, hubType="Datastore")
-    log.trace("placement_hub = %s", hub)
+    log.info('Trace')
+    '\n    Returns the default storage policy reference assigned to a datastore.\n\n    profile_manager\n        Reference to the profile manager.\n\n    datastore\n        Reference to the datastore.\n    '
+    hub = pbm.placement.PlacementHub(hubId=datastore._moId, hubType='Datastore')
+    log.trace('placement_hub = %s', hub)
     try:
+        log.info('Trace')
         policy_id = profile_manager.QueryDefaultRequirementProfile(hub)
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)
@@ -307,11 +253,9 @@ def get_default_storage_policy_of_datastore(profile_manager, datastore):
         raise VMwareRuntimeError(exc.msg)
     policy_refs = get_policies_by_id(profile_manager, [policy_id])
     if not policy_refs:
-        raise VMwareObjectRetrievalError(
-            "Storage policy with id '{}' was not found".format(policy_id)
-        )
+        log.info('Trace')
+        raise VMwareObjectRetrievalError("Storage policy with id '{}' was not found".format(policy_id))
     return policy_refs[0]
-
 
 def assign_default_storage_policy_to_datastore(profile_manager, policy, datastore):
     """
@@ -326,19 +270,14 @@ def assign_default_storage_policy_to_datastore(profile_manager, policy, datastor
     datastore
         Reference to the datastore.
     """
-    placement_hub = pbm.placement.PlacementHub(
-        hubId=datastore._moId, hubType="Datastore"
-    )
-    log.trace("placement_hub = %s", placement_hub)
+    placement_hub = pbm.placement.PlacementHub(hubId=datastore._moId, hubType='Datastore')
+    log.trace('placement_hub = %s', placement_hub)
     try:
-        profile_manager.AssignDefaultRequirementProfile(
-            policy.profileId, [placement_hub]
-        )
+        log.info('Trace')
+        profile_manager.AssignDefaultRequirementProfile(policy.profileId, [placement_hub])
     except vim.fault.NoPermission as exc:
         log.exception(exc)
-        raise VMwareApiError(
-            "Not enough permissions. Required privilege: {}".format(exc.privilegeId)
-        )
+        raise VMwareApiError('Not enough permissions. Required privilege: {}'.format(exc.privilegeId))
     except vim.fault.VimFault as exc:
         log.exception(exc)
         raise VMwareApiError(exc.msg)

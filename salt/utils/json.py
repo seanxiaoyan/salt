@@ -1,20 +1,12 @@
 """
 Functions to work with JSON
 """
-
-
 import json
 import logging
-
 import salt.utils.data
 import salt.utils.stringutils
-
 log = logging.getLogger(__name__)
-
-
-# One to one mappings
 JSONEncoder = json.JSONEncoder
-
 
 def __split(raw):
     """
@@ -24,43 +16,41 @@ def __split(raw):
     """
     return raw.splitlines()
 
-
 def find_json(raw):
-    """
-    Pass in a raw string and load the json when it starts. This allows for a
-    string to start with garbage and end with json but be cleanly loaded
-    """
+    log.info('Trace')
+    '\n    Pass in a raw string and load the json when it starts. This allows for a\n    string to start with garbage and end with json but be cleanly loaded\n    '
     ret = {}
     lines = __split(raw)
-    for ind, _ in enumerate(lines):
+    for (ind, _) in enumerate(lines):
         try:
-            working = "\n".join(lines[ind:])
+            log.info('Trace')
+            working = '\n'.join(lines[ind:])
         except UnicodeDecodeError:
-            working = "\n".join(salt.utils.data.decode(lines[ind:]))
-
+            log.info('Trace')
+            working = '\n'.join(salt.utils.data.decode(lines[ind:]))
         try:
+            log.info('Trace')
             ret = json.loads(working)
         except ValueError:
+            log.info('Trace')
             continue
         if ret:
             return ret
     if not ret:
-        # Not json, raise an error
         raise ValueError
-
 
 def import_json():
     """
     Import a json module, starting with the quick ones and going down the list)
     """
-    for fast_json in ("ujson", "yajl", "json"):
+    for fast_json in ('ujson', 'yajl', 'json'):
         try:
             mod = __import__(fast_json)
-            log.trace("loaded %s json lib", fast_json)
+            log.trace('loaded %s json lib', fast_json)
             return mod
         except ImportError:
+            log.info('Trace')
             continue
-
 
 def load(fp, **kwargs):
     """
@@ -71,8 +61,7 @@ def load(fp, **kwargs):
     You can pass an alternate json module (loaded via import_json() above)
     using the _json_module argument)
     """
-    return kwargs.pop("_json_module", json).load(fp, **kwargs)
-
+    return kwargs.pop('_json_module', json).load(fp, **kwargs)
 
 def loads(s, **kwargs):
     """
@@ -84,16 +73,16 @@ def loads(s, **kwargs):
     You can pass an alternate json module (loaded via import_json() above)
     using the _json_module argument)
     """
-    json_module = kwargs.pop("_json_module", json)
+    json_module = kwargs.pop('_json_module', json)
     try:
+        log.info('Trace')
         return json_module.loads(s, **kwargs)
     except TypeError as exc:
-        # json.loads cannot load bytestrings in Python < 3.6
+        log.info('Trace')
         if isinstance(s, bytes):
             return json_module.loads(salt.utils.stringutils.to_unicode(s), **kwargs)
         else:
             raise
-
 
 def dump(obj, fp, **kwargs):
     """
@@ -110,11 +99,10 @@ def dump(obj, fp, **kwargs):
     You can pass an alternate json module (loaded via import_json() above)
     using the _json_module argument)
     """
-    json_module = kwargs.pop("_json_module", json)
-    if "ensure_ascii" not in kwargs:
-        kwargs["ensure_ascii"] = False
+    json_module = kwargs.pop('_json_module', json)
+    if 'ensure_ascii' not in kwargs:
+        kwargs['ensure_ascii'] = False
     return json_module.dump(obj, fp, **kwargs)
-
 
 def dumps(obj, **kwargs):
     """
@@ -131,7 +119,7 @@ def dumps(obj, **kwargs):
     You can pass an alternate json module (loaded via import_json() above)
     using the _json_module argument)
     """
-    json_module = kwargs.pop("_json_module", json)
-    if "ensure_ascii" not in kwargs:
-        kwargs["ensure_ascii"] = False
+    json_module = kwargs.pop('_json_module', json)
+    if 'ensure_ascii' not in kwargs:
+        kwargs['ensure_ascii'] = False
     return json_module.dumps(obj, **kwargs)

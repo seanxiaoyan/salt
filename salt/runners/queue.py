@@ -60,14 +60,13 @@ The above configuration will pop 2 runner jobs off the runner queue, and then
 run them.  And it will do this every minute, unless there are any jobs that are
 still running from the last time the process_runner task was executed.
 """
-
-
 import salt.loader
 from salt.exceptions import SaltInvocationError
 from salt.utils.event import get_event, tagify
+import logging
+log = logging.getLogger(__name__)
 
-
-def insert(queue, items, backend="sqlite"):
+def insert(queue, items, backend='sqlite'):
     """
     Add an item or items to a queue
 
@@ -81,14 +80,13 @@ def insert(queue, items, backend="sqlite"):
         salt-run queue.insert myqueue "['item1', 'item2', 'item3']" backend=sqlite
     """
     queue_funcs = salt.loader.queues(__opts__)
-    cmd = "{}.insert".format(backend)
+    cmd = '{}.insert'.format(backend)
     if cmd not in queue_funcs:
         raise SaltInvocationError('Function "{}" is not available'.format(cmd))
     ret = queue_funcs[cmd](items=items, queue=queue)
     return ret
 
-
-def delete(queue, items, backend="sqlite"):
+def delete(queue, items, backend='sqlite'):
     """
     Delete an item or items from a queue
 
@@ -101,14 +99,13 @@ def delete(queue, items, backend="sqlite"):
         salt-run queue.delete myqueue "['item1', 'item2', 'item3']"
     """
     queue_funcs = salt.loader.queues(__opts__)
-    cmd = "{}.delete".format(backend)
+    cmd = '{}.delete'.format(backend)
     if cmd not in queue_funcs:
         raise SaltInvocationError('Function "{}" is not available'.format(cmd))
     ret = queue_funcs[cmd](items=items, queue=queue)
     return ret
 
-
-def list_queues(backend="sqlite"):
+def list_queues(backend='sqlite'):
     """
     Return a list of Salt Queues on the backend
 
@@ -120,14 +117,13 @@ def list_queues(backend="sqlite"):
         salt-run queue.list_queues backend=sqlite
     """
     queue_funcs = salt.loader.queues(__opts__)
-    cmd = "{}.list_queues".format(backend)
+    cmd = '{}.list_queues'.format(backend)
     if cmd not in queue_funcs:
         raise SaltInvocationError('Function "{}" is not available'.format(cmd))
     ret = queue_funcs[cmd]()
     return ret
 
-
-def list_length(queue, backend="sqlite"):
+def list_length(queue, backend='sqlite'):
     """
     Provide the number of items in a queue
 
@@ -139,14 +135,13 @@ def list_length(queue, backend="sqlite"):
         salt-run queue.list_length myqueue backend=sqlite
     """
     queue_funcs = salt.loader.queues(__opts__)
-    cmd = "{}.list_length".format(backend)
+    cmd = '{}.list_length'.format(backend)
     if cmd not in queue_funcs:
         raise SaltInvocationError('Function "{}" is not available'.format(cmd))
     ret = queue_funcs[cmd](queue=queue)
     return ret
 
-
-def list_items(queue, backend="sqlite"):
+def list_items(queue, backend='sqlite'):
     """
     List contents of a queue
 
@@ -158,83 +153,47 @@ def list_items(queue, backend="sqlite"):
         salt-run queue.list_items myqueue backend=sqlite
     """
     queue_funcs = salt.loader.queues(__opts__)
-    cmd = "{}.list_items".format(backend)
+    cmd = '{}.list_items'.format(backend)
     if cmd not in queue_funcs:
         raise SaltInvocationError('Function "{}" is not available'.format(cmd))
     ret = queue_funcs[cmd](queue=queue)
     return ret
 
-
-def pop(queue, quantity=1, backend="sqlite", is_runner=False):
-    """
-    Pop one or more or all items from a queue
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run queue.pop myqueue
-        salt-run queue.pop myqueue 6
-        salt-run queue.pop myqueue all
-        salt-run queue.pop myqueue 6 backend=sqlite
-        salt-run queue.pop myqueue all backend=sqlite
-    """
+def pop(queue, quantity=1, backend='sqlite', is_runner=False):
+    log.info('Trace')
+    '\n    Pop one or more or all items from a queue\n\n    CLI Example:\n\n    .. code-block:: bash\n\n        salt-run queue.pop myqueue\n        salt-run queue.pop myqueue 6\n        salt-run queue.pop myqueue all\n        salt-run queue.pop myqueue 6 backend=sqlite\n        salt-run queue.pop myqueue all backend=sqlite\n    '
     queue_funcs = salt.loader.queues(__opts__)
-    cmd = "{}.pop".format(backend)
+    cmd = '{}.pop'.format(backend)
     if cmd not in queue_funcs:
         raise SaltInvocationError('Function "{}" is not available'.format(cmd))
     ret = queue_funcs[cmd](quantity=quantity, queue=queue, is_runner=is_runner)
     return ret
 
-
-def process_queue(queue, quantity=1, backend="sqlite", is_runner=False):
-    """
-    Pop items off a queue and create an event on the Salt event bus to be
-    processed by a Reactor.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run queue.process_queue myqueue
-        salt-run queue.process_queue myqueue 6
-        salt-run queue.process_queue myqueue all backend=sqlite
-    """
-    # get ready to send an event
-    with get_event(
-        "master",
-        __opts__["sock_dir"],
-        opts=__opts__,
-        listen=False,
-    ) as event_bus:
+def process_queue(queue, quantity=1, backend='sqlite', is_runner=False):
+    log.info('Trace')
+    '\n    Pop items off a queue and create an event on the Salt event bus to be\n    processed by a Reactor.\n\n    CLI Example:\n\n    .. code-block:: bash\n\n        salt-run queue.process_queue myqueue\n        salt-run queue.process_queue myqueue 6\n        salt-run queue.process_queue myqueue all backend=sqlite\n    '
+    with get_event('master', __opts__['sock_dir'], opts=__opts__, listen=False) as event_bus:
         try:
-            items = pop(
-                queue=queue, quantity=quantity, backend=backend, is_runner=is_runner
-            )
+            log.info('Trace')
+            items = pop(queue=queue, quantity=quantity, backend=backend, is_runner=is_runner)
         except SaltInvocationError as exc:
-            error_txt = "{}".format(exc)
-            __jid_event__.fire_event({"errors": error_txt}, "progress")
+            log.info('Trace')
+            error_txt = '{}'.format(exc)
+            __jid_event__.fire_event({'errors': error_txt}, 'progress')
             return False
-
-        data = {
-            "items": items,
-            "backend": backend,
-            "queue": queue,
-        }
-        event_bus.fire_event(data, tagify([queue, "process"], prefix="queue"))
+        data = {'items': items, 'backend': backend, 'queue': queue}
+        event_bus.fire_event(data, tagify([queue, 'process'], prefix='queue'))
     return data
-
 
 def __get_queue_opts(queue=None, backend=None):
     """
     Get consistent opts for the queued runners
     """
     if queue is None:
-        queue = __opts__.get("runner_queue", {}).get("queue")
+        queue = __opts__.get('runner_queue', {}).get('queue')
     if backend is None:
-        backend = __opts__.get("runner_queue", {}).get("backend", "pgjsonb")
-    return {"backend": backend, "queue": queue}
-
+        backend = __opts__.get('runner_queue', {}).get('backend', 'pgjsonb')
+    return {'backend': backend, 'queue': queue}
 
 def insert_runner(fun, args=None, kwargs=None, queue=None, backend=None):
     """
@@ -266,13 +225,12 @@ def insert_runner(fun, args=None, kwargs=None, queue=None, backend=None):
     if args is None:
         args = []
     elif isinstance(args, str):
-        args = args.split(",")
+        args = args.split(',')
     if kwargs is None:
         kwargs = {}
     queue_kwargs = __get_queue_opts(queue=queue, backend=backend)
-    data = {"fun": fun, "args": args, "kwargs": kwargs}
+    data = {'fun': fun, 'args': args, 'kwargs': kwargs}
     return insert(items=data, **queue_kwargs)
-
 
 def process_runner(quantity=1, queue=None, backend=None):
     """
@@ -297,5 +255,5 @@ def process_runner(quantity=1, queue=None, backend=None):
     """
     queue_kwargs = __get_queue_opts(queue=queue, backend=backend)
     data = process_queue(quantity=quantity, is_runner=True, **queue_kwargs)
-    for job in data["items"]:
-        __salt__[job["fun"]](*job["args"], **job["kwargs"])
+    for job in data['items']:
+        __salt__[job['fun']](*job['args'], **job['kwargs'])

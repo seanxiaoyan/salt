@@ -41,26 +41,17 @@ create the table(s) and get and set values.
     get_query: "SELECT d FROM advanced WHERE a=:key"
     set_query: "INSERT OR REPLACE INTO advanced (a, d) VALUES (:key, :value)"
 """
-
 import codecs
 import logging
-
 import salt.utils.msgpack
-
+log = logging.getLogger(__name__)
 try:
     import sqlite3
-
     HAS_SQLITE3 = True
 except ImportError:
     HAS_SQLITE3 = False
-
-
-DEFAULT_TABLE = "sdb"
-
-log = logging.getLogger(__name__)
-
-__func_alias__ = {"set_": "set"}
-
+DEFAULT_TABLE = 'sdb'
+__func_alias__ = {'set_': 'set'}
 
 def __virtual__():
     """
@@ -70,49 +61,38 @@ def __virtual__():
         return False
     return True
 
-
-def _quote(s, errors="strict"):
-    encodable = s.encode("utf-8", errors).decode("utf-8")
-
-    nul_index = encodable.find("\x00")
-
+def _quote(s, errors='strict'):
+    encodable = s.encode('utf-8', errors).decode('utf-8')
+    nul_index = encodable.find('\x00')
     if nul_index >= 0:
-        error = UnicodeEncodeError(
-            "NUL-terminated utf-8",
-            encodable,
-            nul_index,
-            nul_index + 1,
-            "NUL not allowed",
-        )
+        error = UnicodeEncodeError('NUL-terminated utf-8', encodable, nul_index, nul_index + 1, 'NUL not allowed')
         error_handler = codecs.lookup_error(errors)
-        replacement, _ = error_handler(error)
-        encodable = encodable.replace("\x00", replacement)
-
+        (replacement, _) = error_handler(error)
+        encodable = encodable.replace('\x00', replacement)
     return '"' + encodable.replace('"', '""') + '"'
 
-
 def _connect(profile):
-    db = profile["database"]
+    log.info('Trace')
+    db = profile['database']
     table = None
     conn = sqlite3.connect(db)
     cur = conn.cursor()
-    stmts = profile.get("create_statements")
-    table = profile.get("table", DEFAULT_TABLE)
-    idx = _quote(table + "_idx")
+    stmts = profile.get('create_statements')
+    table = profile.get('table', DEFAULT_TABLE)
+    idx = _quote(table + '_idx')
     table = _quote(table)
-
     try:
+        log.info('Trace')
         if stmts:
             for sql in stmts:
                 cur.execute(sql)
-        elif profile.get("create_table", True):
-            cur.execute("CREATE TABLE {} (key text, value blob)".format(table))
-            cur.execute("CREATE UNIQUE INDEX {} ON {} (key)".format(idx, table))
+        elif profile.get('create_table', True):
+            cur.execute('CREATE TABLE {} (key text, value blob)'.format(table))
+            cur.execute('CREATE UNIQUE INDEX {} ON {} (key)'.format(idx, table))
     except sqlite3.OperationalError:
+        log.info('Trace')
         pass
-
     return (conn, cur, table)
-
 
 def set_(key, value, profile=None):
     """
@@ -120,16 +100,12 @@ def set_(key, value, profile=None):
     """
     if not profile:
         return False
-    conn, cur, table = _connect(profile)
+    (conn, cur, table) = _connect(profile)
     value = memoryview(salt.utils.msgpack.packb(value))
-    q = profile.get(
-        "set_query",
-        "INSERT OR REPLACE INTO {} VALUES (:key, :value)".format(table),
-    )
-    conn.execute(q, {"key": key, "value": value})
+    q = profile.get('set_query', 'INSERT OR REPLACE INTO {} VALUES (:key, :value)'.format(table))
+    conn.execute(q, {'key': key, 'value': value})
     conn.commit()
     return True
-
 
 def get(key, profile=None):
     """
@@ -137,9 +113,9 @@ def get(key, profile=None):
     """
     if not profile:
         return None
-    _, cur, table = _connect(profile)
-    q = profile.get("get_query", "SELECT value FROM {} WHERE key=:key".format(table))
-    res = cur.execute(q, {"key": key})
+    (_, cur, table) = _connect(profile)
+    q = profile.get('get_query', 'SELECT value FROM {} WHERE key=:key'.format(table))
+    res = cur.execute(q, {'key': key})
     res = res.fetchone()
     if not res:
         return None

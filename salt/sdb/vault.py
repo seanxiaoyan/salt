@@ -38,82 +38,70 @@ The above URI is analogous to running the following vault command:
 
     $ vault read -field=mypassword secret/passwords
 """
-
-
 import logging
-
 import salt.exceptions
-
 log = logging.getLogger(__name__)
-
-__func_alias__ = {"set_": "set"}
-
+__func_alias__ = {'set_': 'set'}
 
 def set_(key, value, profile=None):
     """
     Set a key/value pair in the vault service
     """
-    if "?" in key:
-        path, key = key.split("?")
+    if '?' in key:
+        (path, key) = key.split('?')
     else:
-        path, key = key.rsplit("/", 1)
+        (path, key) = key.rsplit('/', 1)
     data = {key: value}
-
-    version2 = __utils__["vault.is_v2"](path)
-    if version2["v2"]:
-        path = version2["data"]
-        data = {"data": data}
-
+    version2 = __utils__['vault.is_v2'](path)
+    if version2['v2']:
+        path = version2['data']
+        data = {'data': data}
     try:
-        url = "v1/{}".format(path)
-        response = __utils__["vault.make_request"]("POST", url, json=data)
-
+        log.info('Trace')
+        url = 'v1/{}'.format(path)
+        response = __utils__['vault.make_request']('POST', url, json=data)
         if response.status_code != 204:
             response.raise_for_status()
         return True
-    except Exception as e:  # pylint: disable=broad-except
-        log.error("Failed to write secret! %s: %s", type(e).__name__, e)
+    except Exception as e:
+        log.error('Failed to write secret! %s: %s', type(e).__name__, e)
         raise salt.exceptions.CommandExecutionError(e)
-
 
 def get(key, profile=None):
     """
     Get a value from the vault service
     """
-    if "?" in key:
-        path, key = key.split("?")
+    if '?' in key:
+        (path, key) = key.split('?')
     else:
-        path, key = key.rsplit("/", 1)
-
-    version2 = __utils__["vault.is_v2"](path)
-    if version2["v2"]:
-        path = version2["data"]
-
+        (path, key) = key.rsplit('/', 1)
+    version2 = __utils__['vault.is_v2'](path)
+    if version2['v2']:
+        path = version2['data']
     try:
-        url = "v1/{}".format(path)
-        response = __utils__["vault.make_request"]("GET", url)
+        log.info('Trace')
+        url = 'v1/{}'.format(path)
+        response = __utils__['vault.make_request']('GET', url)
         if response.status_code == 404:
-            if version2["v2"]:
-                path = version2["data"] + "/" + key
-                url = "v1/{}".format(path)
-                response = __utils__["vault.make_request"]("GET", url)
+            if version2['v2']:
+                path = version2['data'] + '/' + key
+                url = 'v1/{}'.format(path)
+                response = __utils__['vault.make_request']('GET', url)
                 if response.status_code == 404:
                     return None
             else:
                 return None
         if response.status_code != 200:
             response.raise_for_status()
-        data = response.json()["data"]
-
-        if version2["v2"]:
-            if key in data["data"]:
-                return data["data"][key]
+        data = response.json()['data']
+        if version2['v2']:
+            if key in data['data']:
+                return data['data'][key]
             else:
-                return data["data"]
-        else:
-            if key in data:
-                return data[key]
+                return data['data']
+        elif key in data:
+            return data[key]
         return None
-    except Exception as e:  # pylint: disable=broad-except
-        log.error("Failed to read secret! %s: %s", type(e).__name__, e)
+    except Exception as e:
+        log.error('Failed to read secret! %s: %s', type(e).__name__, e)
         raise salt.exceptions.CommandExecutionError(e)

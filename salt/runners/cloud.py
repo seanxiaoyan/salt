@@ -5,29 +5,21 @@ The Salt Cloud Runner
 This runner wraps the functionality of salt cloud making salt cloud routines
 available to all internal apis via the runner system
 """
-
 import logging
 import os
-
 import salt.cloud
 import salt.utils.args
 from salt.exceptions import SaltCloudConfigError
-
-# Get logging started
 log = logging.getLogger(__name__)
-
 
 def _get_client():
     """
     Return cloud client
     """
-    client = salt.cloud.CloudClient(
-        os.path.join(os.path.dirname(__opts__["conf_file"]), "cloud")
-    )
+    client = salt.cloud.CloudClient(os.path.join(os.path.dirname(__opts__['conf_file']), 'cloud'))
     return client
 
-
-def list_sizes(provider="all"):
+def list_sizes(provider='all'):
     """
     List cloud provider sizes for the given providers
     """
@@ -35,8 +27,7 @@ def list_sizes(provider="all"):
     sizes = client.list_sizes(provider)
     return sizes
 
-
-def list_images(provider="all"):
+def list_images(provider='all'):
     """
     List cloud provider images for the given providers
     """
@@ -44,8 +35,7 @@ def list_images(provider="all"):
     images = client.list_images(provider)
     return images
 
-
-def list_locations(provider="all"):
+def list_locations(provider='all'):
     """
     List cloud provider sizes for the given providers
     """
@@ -53,8 +43,7 @@ def list_locations(provider="all"):
     locations = client.list_locations(provider)
     return locations
 
-
-def query(query_type="list_nodes"):
+def query(query_type='list_nodes'):
     """
     List cloud provider data for all providers
     """
@@ -62,8 +51,7 @@ def query(query_type="list_nodes"):
     info = client.query(query_type)
     return info
 
-
-def full_query(query_type="list_nodes_full"):
+def full_query(query_type='list_nodes_full'):
     """
     List all available cloud provider data
     """
@@ -71,15 +59,13 @@ def full_query(query_type="list_nodes_full"):
     info = client.full_query(query_type)
     return info
 
-
-def select_query(query_type="list_nodes_select"):
+def select_query(query_type='list_nodes_select'):
     """
     List selected nodes
     """
     client = _get_client()
     info = client.select_query(query_type)
     return info
-
 
 def profile(prof=None, instances=None, opts=None, **kwargs):
     """
@@ -92,24 +78,19 @@ def profile(prof=None, instances=None, opts=None, **kwargs):
 
         salt-run cloud.profile prof=my-ec2 instances=node1,node2,node3
     """
-    if prof is None and "profile" in kwargs:
-        prof = kwargs["profile"]
-
+    if prof is None and 'profile' in kwargs:
+        prof = kwargs['profile']
     if prof is None:
-        return {"Error": "A profile (or prof) must be defined"}
-
-    if instances is None and "names" in kwargs:
-        instances = kwargs["names"]
-
+        return {'Error': 'A profile (or prof) must be defined'}
+    if instances is None and 'names' in kwargs:
+        instances = kwargs['names']
     if instances is None:
-        return {"Error": "One or more instances (comma-delimited) must be set"}
-
+        return {'Error': 'One or more instances (comma-delimited) must be set'}
     client = _get_client()
     if isinstance(opts, dict):
         client.opts.update(opts)
     info = client.profile(prof, instances, **salt.utils.args.clean_kwargs(**kwargs))
     return info
-
 
 def map_run(path=None, opts=None, **kwargs):
     """
@@ -121,7 +102,6 @@ def map_run(path=None, opts=None, **kwargs):
     info = client.map_run(path, **salt.utils.args.clean_kwargs(**kwargs))
     return info
 
-
 def destroy(instances, opts=None):
     """
     Destroy the named vm(s)
@@ -132,42 +112,19 @@ def destroy(instances, opts=None):
     info = client.destroy(instances)
     return info
 
-
-def action(
-    func=None,
-    cloudmap=None,
-    instances=None,
-    provider=None,
-    instance=None,
-    opts=None,
-    **kwargs
-):
-    """
-    Execute a single action on the given map/provider/instance
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt-run cloud.action start my-salt-vm
-    """
+def action(func=None, cloudmap=None, instances=None, provider=None, instance=None, opts=None, **kwargs):
+    log.info('Trace')
+    '\n    Execute a single action on the given map/provider/instance\n\n    CLI Example:\n\n    .. code-block:: bash\n\n        salt-run cloud.action start my-salt-vm\n    '
     info = {}
     client = _get_client()
     if isinstance(opts, dict):
         client.opts.update(opts)
     try:
-        info = client.action(
-            func,
-            cloudmap,
-            instances,
-            provider,
-            instance,
-            salt.utils.args.clean_kwargs(**kwargs),
-        )
+        log.info('Trace')
+        info = client.action(func, cloudmap, instances, provider, instance, salt.utils.args.clean_kwargs(**kwargs))
     except SaltCloudConfigError as err:
         log.error(err)
     return info
-
 
 def create(provider, instances, opts=None, **kwargs):
     """

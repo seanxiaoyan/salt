@@ -1,19 +1,3 @@
-#!/usr/bin/env python
-#
-# Copyright 2009 Facebook
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
-
 """A command line parsing module that lets modules define their own options.
 
 Each module defines its own options which are added to the global
@@ -81,27 +65,23 @@ instances to define isolated sets of options, such as for subcommands.
    Dashes are typical for command-line usage while config files require
    underscores.
 """
-# pylint: skip-file
-
 from __future__ import absolute_import, division, print_function
-
 import datetime
 import numbers
 import re
 import sys
 import os
 import textwrap
-
 from salt.ext.tornado.escape import _unicode, native_str
 from salt.ext.tornado.log import define_logging_options
 from salt.ext.tornado import stack_context
 from salt.ext.tornado.util import basestring_type, exec_in
-
+import logging
+log = logging.getLogger(__name__)
 
 class Error(Exception):
     """Exception raised by errors in the options module."""
     pass
-
 
 class OptionParser(object):
     """A collection of options, a dictionary with object-like access.
@@ -109,12 +89,11 @@ class OptionParser(object):
     Normally accessed via static functions in the `tornado.options` module,
     which reference a global instance.
     """
+
     def __init__(self):
-        # we have to use self.__dict__ because we override setattr.
         self.__dict__['_options'] = {}
         self.__dict__['_parse_callbacks'] = []
-        self.define("help", type=bool, help="show this help information",
-                    callback=self._help_callback)
+        self.define('help', type=bool, help='show this help information', callback=self._help_callback)
 
     def _normalize_name(self, name):
         return name.replace('_', '-')
@@ -123,13 +102,13 @@ class OptionParser(object):
         name = self._normalize_name(name)
         if isinstance(self._options.get(name), _Option):
             return self._options[name].value()
-        raise AttributeError("Unrecognized option %r" % name)
+        raise AttributeError('Unrecognized option %r' % name)
 
     def __setattr__(self, name, value):
         name = self._normalize_name(name)
         if isinstance(self._options.get(name), _Option):
             return self._options[name].set(value)
-        raise AttributeError("Unrecognized option %r" % name)
+        raise AttributeError('Unrecognized option %r' % name)
 
     def __iter__(self):
         return (opt.name for opt in self._options.values())
@@ -149,14 +128,14 @@ class OptionParser(object):
 
         .. versionadded:: 3.1
         """
-        return [(opt.name, opt.value()) for name, opt in self._options.items()]
+        return [(opt.name, opt.value()) for (name, opt) in self._options.items()]
 
     def groups(self):
         """The set of option-groups created by ``define``.
 
         .. versionadded:: 3.1
         """
-        return set(opt.group_name for opt in self._options.values())
+        return set((opt.group_name for opt in self._options.values()))
 
     def group_dict(self, group):
         """The names and values of options in a group.
@@ -175,20 +154,16 @@ class OptionParser(object):
 
         .. versionadded:: 3.1
         """
-        return dict(
-            (opt.name, opt.value()) for name, opt in self._options.items()
-            if not group or group == opt.group_name)
+        return dict(((opt.name, opt.value()) for (name, opt) in self._options.items() if not group or group == opt.group_name))
 
     def as_dict(self):
         """The names and values of all options.
 
         .. versionadded:: 3.1
         """
-        return dict(
-            (opt.name, opt.value()) for name, opt in self._options.items())
+        return dict(((opt.name, opt.value()) for (name, opt) in self._options.items()))
 
-    def define(self, name, default=None, type=None, help=None, metavar=None,
-               multiple=False, group=None, callback=None):
+    def define(self, name, default=None, type=None, help=None, metavar=None, multiple=False, group=None, callback=None):
         """Defines a new command line option.
 
         If ``type`` is given (one of str, float, int, datetime, or timedelta)
@@ -226,20 +201,14 @@ class OptionParser(object):
         """
         normalized = self._normalize_name(name)
         if normalized in self._options:
-            raise Error("Option %r already defined in %s" %
-                        (normalized, self._options[normalized].file_name))
+            raise Error('Option %r already defined in %s' % (normalized, self._options[normalized].file_name))
         frame = sys._getframe(0)
         options_file = frame.f_code.co_filename
-
-        # Can be called directly, or through top level define() fn, in which
-        # case, step up above that frame to look for real caller.
-        if (frame.f_back.f_code.co_filename == options_file and
-                frame.f_back.f_code.co_name == 'define'):
+        if frame.f_back.f_code.co_filename == options_file and frame.f_back.f_code.co_name == 'define':
             frame = frame.f_back
-
         file_name = frame.f_back.f_code.co_filename
         if file_name == options_file:
-            file_name = ""
+            file_name = ''
         if type is None:
             if not multiple and default is not None:
                 type = default.__class__
@@ -249,11 +218,7 @@ class OptionParser(object):
             group_name = group
         else:
             group_name = file_name
-        option = _Option(name, file_name=file_name,
-                         default=default, type=type, help=help,
-                         metavar=metavar, multiple=multiple,
-                         group_name=group_name,
-                         callback=callback)
+        option = _Option(name, file_name=file_name, default=default, type=type, help=help, metavar=metavar, multiple=multiple, group_name=group_name, callback=callback)
         self._options[normalized] = option
 
     def parse_command_line(self, args=None, final=True):
@@ -273,15 +238,14 @@ class OptionParser(object):
             args = sys.argv
         remaining = []
         for i in range(1, len(args)):
-            # All things after the last option are command line arguments
-            if not args[i].startswith("-"):
+            if not args[i].startswith('-'):
                 remaining = args[i:]
                 break
-            if args[i] == "--":
+            if args[i] == '--':
                 remaining = args[i + 1:]
                 break
-            arg = args[i].lstrip("-")
-            name, equals, value = arg.partition("=")
+            arg = args[i].lstrip('-')
+            (name, equals, value) = arg.partition('=')
             name = self._normalize_name(name)
             if name not in self._options:
                 self.print_help()
@@ -289,14 +253,12 @@ class OptionParser(object):
             option = self._options[name]
             if not equals:
                 if option.type == bool:
-                    value = "true"
+                    value = 'true'
                 else:
                     raise Error('Option %r requires a value' % name)
             option.parse(value)
-
         if final:
             self.run_parse_callbacks()
-
         return remaining
 
     def parse_config_file(self, path, final=True):
@@ -321,7 +283,6 @@ class OptionParser(object):
             normalized = self._normalize_name(name)
             if normalized in self._options:
                 self._options[normalized].set(config[name])
-
         if final:
             self.run_parse_callbacks()
 
@@ -329,30 +290,28 @@ class OptionParser(object):
         """Prints all the command line options to stderr (or another file)."""
         if file is None:
             file = sys.stderr
-        print("Usage: %s [OPTIONS]" % sys.argv[0], file=file)
-        print("\nOptions:\n", file=file)
+        print('Usage: %s [OPTIONS]' % sys.argv[0], file=file)
+        print('\nOptions:\n', file=file)
         by_group = {}
         for option in self._options.values():
             by_group.setdefault(option.group_name, []).append(option)
-
-        for filename, o in sorted(by_group.items()):
+        for (filename, o) in sorted(by_group.items()):
             if filename:
-                print("\n%s options:\n" % os.path.normpath(filename), file=file)
+                print('\n%s options:\n' % os.path.normpath(filename), file=file)
             o.sort(key=lambda option: option.name)
             for option in o:
-                # Always print names with dashes in a CLI context.
                 prefix = self._normalize_name(option.name)
                 if option.metavar:
-                    prefix += "=" + option.metavar
-                description = option.help or ""
+                    prefix += '=' + option.metavar
+                description = option.help or ''
                 if option.default is not None and option.default != '':
-                    description += " (default %s)" % option.default
+                    description += ' (default %s)' % option.default
                 lines = textwrap.wrap(description, 79 - 35)
                 if len(prefix) > 30 or len(lines) == 0:
                     lines.insert(0, '')
-                print("  --%-30s %s" % (prefix, lines[0]), file=file)
+                print('  --%-30s %s' % (prefix, lines[0]), file=file)
                 for line in lines[1:]:
-                    print("%-34s %s" % (' ', line), file=file)
+                    print('%-34s %s' % (' ', line), file=file)
         print(file=file)
 
     def _help_callback(self, value):
@@ -385,7 +344,6 @@ class OptionParser(object):
         """
         return _Mockable(self)
 
-
 class _Mockable(object):
     """`mock.patch` compatible wrapper for `OptionParser`.
 
@@ -398,8 +356,8 @@ class _Mockable(object):
     _Mockable's getattr and setattr pass through to the underlying
     OptionParser, and delattr undoes the effect of a previous setattr.
     """
+
     def __init__(self, options):
-        # Modify __dict__ directly to bypass __setattr__
         self.__dict__['_options'] = options
         self.__dict__['_originals'] = {}
 
@@ -414,13 +372,10 @@ class _Mockable(object):
     def __delattr__(self, name):
         setattr(self._options, name, self._originals.pop(name))
 
-
 class _Option(object):
     UNSET = object()
 
-    def __init__(self, name, default=None, type=basestring_type, help=None,
-                 metavar=None, multiple=False, file_name=None, group_name=None,
-                 callback=None):
+    def __init__(self, name, default=None, type=basestring_type, help=None, metavar=None, multiple=False, file_name=None, group_name=None, callback=None):
         if default is None and multiple:
             default = []
         self.name = name
@@ -438,18 +393,12 @@ class _Option(object):
         return self.default if self._value is _Option.UNSET else self._value
 
     def parse(self, value):
-        _parse = {
-            datetime.datetime: self._parse_datetime,
-            datetime.timedelta: self._parse_timedelta,
-            bool: self._parse_bool,
-            basestring_type: self._parse_string,
-        }.get(self.type, self.type)
+        _parse = {datetime.datetime: self._parse_datetime, datetime.timedelta: self._parse_timedelta, bool: self._parse_bool, basestring_type: self._parse_string}.get(self.type, self.type)
         if self.multiple:
             self._value = []
-            for part in value.split(","):
+            for part in value.split(','):
                 if issubclass(self.type, numbers.Integral):
-                    # allow ranges of the form X:Y (inclusive at both ends)
-                    lo, _, hi = part.partition(":")
+                    (lo, _, hi) = part.partition(':')
                     lo = _parse(lo)
                     hi = _parse(hi) if hi else lo
                     self._value.extend(range(lo, hi + 1))
@@ -464,58 +413,30 @@ class _Option(object):
     def set(self, value):
         if self.multiple:
             if not isinstance(value, list):
-                raise Error("Option %r is required to be a list of %s" %
-                            (self.name, self.type.__name__))
+                raise Error('Option %r is required to be a list of %s' % (self.name, self.type.__name__))
             for item in value:
-                if item is not None and not isinstance(item, self.type):
-                    raise Error("Option %r is required to be a list of %s" %
-                                (self.name, self.type.__name__))
-        else:
-            if value is not None and not isinstance(value, self.type):
-                raise Error("Option %r is required to be a %s (%s given)" %
-                            (self.name, self.type.__name__, type(value)))
+                if item is not None and (not isinstance(item, self.type)):
+                    raise Error('Option %r is required to be a list of %s' % (self.name, self.type.__name__))
+        elif value is not None and (not isinstance(value, self.type)):
+            raise Error('Option %r is required to be a %s (%s given)' % (self.name, self.type.__name__, type(value)))
         self._value = value
         if self.callback is not None:
             self.callback(self._value)
-
-    # Supported date/time formats in our options
-    _DATETIME_FORMATS = [
-        "%a %b %d %H:%M:%S %Y",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d %H:%M",
-        "%Y-%m-%dT%H:%M",
-        "%Y%m%d %H:%M:%S",
-        "%Y%m%d %H:%M",
-        "%Y-%m-%d",
-        "%Y%m%d",
-        "%H:%M:%S",
-        "%H:%M",
-    ]
+    _DATETIME_FORMATS = ['%a %b %d %H:%M:%S %Y', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%dT%H:%M', '%Y%m%d %H:%M:%S', '%Y%m%d %H:%M', '%Y-%m-%d', '%Y%m%d', '%H:%M:%S', '%H:%M']
 
     def _parse_datetime(self, value):
+        log.info('Trace')
         for format in self._DATETIME_FORMATS:
             try:
+                log.info('Trace')
                 return datetime.datetime.strptime(value, format)
             except ValueError:
+                log.info('Trace')
                 pass
         raise Error('Unrecognized date/time format: %r' % value)
-
-    _TIMEDELTA_ABBREV_DICT = {
-        'h': 'hours',
-        'm': 'minutes',
-        'min': 'minutes',
-        's': 'seconds',
-        'sec': 'seconds',
-        'ms': 'milliseconds',
-        'us': 'microseconds',
-        'd': 'days',
-        'w': 'weeks',
-    }
-
-    _FLOAT_PATTERN = r'[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?'
-
-    _TIMEDELTA_PATTERN = re.compile(
-        r'\s*(%s)\s*(\w*)\s*' % _FLOAT_PATTERN, re.IGNORECASE)
+    _TIMEDELTA_ABBREV_DICT = {'h': 'hours', 'm': 'minutes', 'min': 'minutes', 's': 'seconds', 'sec': 'seconds', 'ms': 'milliseconds', 'us': 'microseconds', 'd': 'days', 'w': 'weeks'}
+    _FLOAT_PATTERN = '[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?'
+    _TIMEDELTA_PATTERN = re.compile('\\s*(%s)\\s*(\\w*)\\s*' % _FLOAT_PATTERN, re.IGNORECASE)
 
     def _parse_timedelta(self, value):
         try:
@@ -535,29 +456,19 @@ class _Option(object):
             raise
 
     def _parse_bool(self, value):
-        return value.lower() not in ("false", "0", "f")
+        return value.lower() not in ('false', '0', 'f')
 
     def _parse_string(self, value):
         return _unicode(value)
-
-
 options = OptionParser()
-"""Global options object.
+'Global options object.\n\nAll defined options are available as attributes on this object.\n'
 
-All defined options are available as attributes on this object.
-"""
-
-
-def define(name, default=None, type=None, help=None, metavar=None,
-           multiple=False, group=None, callback=None):
+def define(name, default=None, type=None, help=None, metavar=None, multiple=False, group=None, callback=None):
     """Defines an option in the global namespace.
 
     See `OptionParser.define`.
     """
-    return options.define(name, default=default, type=type, help=help,
-                          metavar=metavar, multiple=multiple, group=group,
-                          callback=callback)
-
+    return options.define(name, default=default, type=type, help=help, metavar=metavar, multiple=multiple, group=group, callback=callback)
 
 def parse_command_line(args=None, final=True):
     """Parses global options from the command line.
@@ -566,14 +477,12 @@ def parse_command_line(args=None, final=True):
     """
     return options.parse_command_line(args, final=final)
 
-
 def parse_config_file(path, final=True):
     """Parses global options from a config file.
 
     See `OptionParser.parse_config_file`.
     """
     return options.parse_config_file(path, final=final)
-
 
 def print_help(file=None):
     """Prints all the command line options to stderr (or another file).
@@ -582,14 +491,10 @@ def print_help(file=None):
     """
     return options.print_help(file)
 
-
 def add_parse_callback(callback):
     """Adds a parse callback, to be invoked when option parsing is done.
 
     See `OptionParser.add_parse_callback`
     """
     options.add_parse_callback(callback)
-
-
-# Default options
 define_logging_options(options)

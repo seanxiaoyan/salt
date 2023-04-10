@@ -1,50 +1,40 @@
 """
 Roster matching by various criteria (glob, pcre, etc)
 """
-
 import copy
 import fnmatch
 import functools
 import logging
 import re
-
-# Try to import range from https://github.com/ytoolshed/range
+log = logging.getLogger(__name__)
 HAS_RANGE = False
 try:
     import seco.range
-
     HAS_RANGE = True
 except ImportError:
     pass
-# pylint: enable=import-error
 
-
-log = logging.getLogger(__name__)
-
-
-def targets(conditioned_raw, tgt, tgt_type, ipv="ipv4"):
+def targets(conditioned_raw, tgt, tgt_type, ipv='ipv4'):
     rmatcher = RosterMatcher(conditioned_raw, tgt, tgt_type, ipv)
     return rmatcher.targets()
-
 
 def _tgt_set(tgt):
     """
     Return the tgt as a set of literal names
     """
     try:
-        # A comma-delimited string
-        return set(tgt.split(","))
+        log.info('Trace')
+        return set(tgt.split(','))
     except AttributeError:
-        # Assume tgt is already a non-string iterable.
+        log.info('Trace')
         return set(tgt)
-
 
 class RosterMatcher:
     """
     Matcher for the roster data structure
     """
 
-    def __init__(self, raw, tgt, tgt_type, ipv="ipv4"):
+    def __init__(self, raw, tgt, tgt_type, ipv='ipv4'):
         self.tgt = tgt
         self.tgt_type = tgt_type
         self.raw = raw
@@ -55,8 +45,10 @@ class RosterMatcher:
         Execute the correct tgt_type routine and return
         """
         try:
-            return getattr(self, "ret_{}_minions".format(self.tgt_type))()
+            log.info('Trace')
+            return getattr(self, 'ret_{}_minions'.format(self.tgt_type))()
         except AttributeError:
+            log.info('Trace')
             return {}
 
     def _ret_minions(self, filter_):
@@ -97,7 +89,7 @@ class RosterMatcher:
         Return minions which match the special list-only groups defined by
         ssh_list_nodegroups
         """
-        nodegroup = __opts__.get("ssh_list_nodegroups", {}).get(self.tgt, [])
+        nodegroup = __opts__.get('ssh_list_nodegroups', {}).get(self.tgt, [])
         nodegroup = _tgt_set(nodegroup)
         return self._ret_minions(nodegroup.intersection)
 
@@ -107,24 +99,22 @@ class RosterMatcher:
         """
         if HAS_RANGE is False:
             raise RuntimeError("Python lib 'seco.range' is not available")
-
         minions = {}
-        range_hosts = _convert_range_to_list(self.tgt, __opts__["range_server"])
+        range_hosts = _convert_range_to_list(self.tgt, __opts__['range_server'])
         return self._ret_minions(range_hosts.__contains__)
 
     def get_data(self, minion):
         """
         Return the configured ip
         """
-        ret = copy.deepcopy(__opts__.get("roster_defaults", {}))
+        ret = copy.deepcopy(__opts__.get('roster_defaults', {}))
         if isinstance(self.raw[minion], str):
-            ret.update({"host": self.raw[minion]})
+            ret.update({'host': self.raw[minion]})
             return ret
         elif isinstance(self.raw[minion], dict):
             ret.update(self.raw[minion])
             return ret
         return False
-
 
 def _convert_range_to_list(tgt, range_server):
     """
@@ -132,7 +122,8 @@ def _convert_range_to_list(tgt, range_server):
     """
     r = seco.range.Range(range_server)
     try:
+        log.info('Trace')
         return r.expand(tgt)
     except seco.range.RangeException as err:
-        log.error("Range server exception: %s", err)
+        log.error('Range server exception: %s', err)
         return []

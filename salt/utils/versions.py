@@ -9,26 +9,19 @@
     Version parsing based on distutils.version which works under python 3
     because on python 3 you can no longer compare strings against integers.
 """
-
-
 import datetime
 import inspect
 import logging
 import numbers
 import sys
 import warnings
-
-# pylint: disable=blacklisted-module
 from distutils.version import LooseVersion as _LooseVersion
 from distutils.version import StrictVersion as _StrictVersion
-
-# pylint: enable=blacklisted-module
 import salt.version
-
 log = logging.getLogger(__name__)
 
-
 class StrictVersion(_StrictVersion):
+
     def parse(self, vstring):
         _StrictVersion.parse(self, vstring)
 
@@ -37,31 +30,22 @@ class StrictVersion(_StrictVersion):
             other = StrictVersion(other)
         return _StrictVersion._cmp(self, other)
 
-
 class LooseVersion(_LooseVersion):
+
     def parse(self, vstring):
         _LooseVersion.parse(self, vstring)
-
-        # Convert every part of the version to string in order to be able to compare
-        self._str_version = [
-            str(vp).zfill(8) if isinstance(vp, int) else vp for vp in self.version
-        ]
+        self._str_version = [str(vp).zfill(8) if isinstance(vp, int) else vp for vp in self.version]
 
     def _cmp(self, other):
         if isinstance(other, str):
             other = LooseVersion(other)
-
         string_in_version = False
         for part in self.version + other.version:
             if not isinstance(part, int):
                 string_in_version = True
                 break
-
         if string_in_version is False:
             return _LooseVersion._cmp(self, other)
-
-        # If we reached this far, it means at least a part of the version contains a string
-        # In python 3, strings and integers are not comparable
         if self._str_version == other._str_version:
             return 0
         if self._str_version < other._str_version:
@@ -69,23 +53,14 @@ class LooseVersion(_LooseVersion):
         if self._str_version > other._str_version:
             return 1
 
-
 def _format_warning(message, category, filename, lineno, line=None):
     """
     Replacement for warnings.formatwarning that disables the echoing of
     the 'line' parameter.
     """
-    return "{}:{}: {}: {}\n".format(filename, lineno, category.__name__, message)
+    return '{}:{}: {}: {}\n'.format(filename, lineno, category.__name__, message)
 
-
-def warn_until(
-    version,
-    message,
-    category=DeprecationWarning,
-    stacklevel=None,
-    _version_info_=None,
-    _dont_call_warnings=False,
-):
+def warn_until(version, message, category=DeprecationWarning, stacklevel=None, _version_info_=None, _dont_call_warnings=False):
     """
     Helper function to raise a warning, by default, a ``DeprecationWarning``,
     until the provided ``version``, after which, a ``RuntimeError`` will
@@ -116,59 +91,22 @@ def warn_until(
         version = salt.version.SaltStackVersion(*version)
     elif isinstance(version, str):
         if version.lower() not in salt.version.SaltStackVersion.LNAMES:
-            raise RuntimeError(
-                "Incorrect spelling for the release name in the warn_utils "
-                "call. Expecting one of these release names: {}".format(
-                    [vs.name for vs in salt.version.SaltVersionsInfo.versions()]
-                )
-            )
+            raise RuntimeError('Incorrect spelling for the release name in the warn_utils call. Expecting one of these release names: {}'.format([vs.name for vs in salt.version.SaltVersionsInfo.versions()]))
         version = salt.version.SaltStackVersion.from_name(version)
     elif not isinstance(version, salt.version.SaltStackVersion):
-        raise RuntimeError(
-            "The 'version' argument should be passed as a tuple, integer, string or "
-            "an instance of 'salt.version.SaltVersion' or "
-            "'salt.version.SaltStackVersion'."
-        )
-
+        raise RuntimeError("The 'version' argument should be passed as a tuple, integer, string or an instance of 'salt.version.SaltVersion' or 'salt.version.SaltStackVersion'.")
     if stacklevel is None:
-        # Attribute the warning to the calling function, not to warn_until()
         stacklevel = 2
-
     if _version_info_ is None:
         _version_info_ = salt.version.__version_info__
-
     _version_ = salt.version.SaltStackVersion(*_version_info_)
-
     if _version_ >= version:
         caller = inspect.getframeinfo(sys._getframe(stacklevel - 1))
-        raise RuntimeError(
-            "The warning triggered on filename '{filename}', line number "
-            "{lineno}, is supposed to be shown until version "
-            "{until_version} is released. Current version is now "
-            "{salt_version}. Please remove the warning.".format(
-                filename=caller.filename,
-                lineno=caller.lineno,
-                until_version=version.formatted_version,
-                salt_version=_version_.formatted_version,
-            ),
-        )
-
+        raise RuntimeError("The warning triggered on filename '{filename}', line number {lineno}, is supposed to be shown until version {until_version} is released. Current version is now {salt_version}. Please remove the warning.".format(filename=caller.filename, lineno=caller.lineno, until_version=version.formatted_version, salt_version=_version_.formatted_version))
     if _dont_call_warnings is False:
-        warnings.warn(
-            message.format(version=version.formatted_version),
-            category,
-            stacklevel=stacklevel,
-        )
+        warnings.warn(message.format(version=version.formatted_version), category, stacklevel=stacklevel)
 
-
-def warn_until_date(
-    date,
-    message,
-    category=DeprecationWarning,
-    stacklevel=None,
-    _current_date=None,
-    _dont_call_warnings=False,
-):
+def warn_until_date(date, message, category=DeprecationWarning, stacklevel=None, _current_date=None, _dont_call_warnings=False):
     """
     Helper function to raise a warning, by default, a ``DeprecationWarning``,
     until the provided ``date``, after which, a ``RuntimeError`` will
@@ -186,58 +124,23 @@ def warn_until_date(
                                 issued. When we're only after the date
                                 checks to raise a ``RuntimeError``.
     """
-    _strptime_fmt = "%Y%m%d"
+    _strptime_fmt = '%Y%m%d'
     if not isinstance(date, (str, datetime.date, datetime.datetime)):
-        raise RuntimeError(
-            "The 'date' argument should be passed as a 'datetime.date()' or "
-            "'datetime.datetime()' objects or as string parserable by "
-            "'datetime.datetime.strptime()' with the following format '{}'.".format(
-                _strptime_fmt
-            )
-        )
+        raise RuntimeError("The 'date' argument should be passed as a 'datetime.date()' or 'datetime.datetime()' objects or as string parserable by 'datetime.datetime.strptime()' with the following format '{}'.".format(_strptime_fmt))
     elif isinstance(date, str):
         date = datetime.datetime.strptime(date, _strptime_fmt)
-
-    # We're really not interested in the time
     if isinstance(date, datetime.datetime):
         date = date.date()
-
     if stacklevel is None:
-        # Attribute the warning to the calling function, not to warn_until_date()
         stacklevel = 2
-
     today = _current_date or datetime.datetime.utcnow().date()
     if today >= date:
         caller = inspect.getframeinfo(sys._getframe(stacklevel - 1))
-        raise RuntimeError(
-            "{message} This warning(now exception) triggered on "
-            "filename '{filename}', line number {lineno}, is "
-            "supposed to be shown until {date}. Today is {today}. "
-            "Please remove the warning.".format(
-                message=message.format(date=date.isoformat(), today=today.isoformat()),
-                filename=caller.filename,
-                lineno=caller.lineno,
-                date=date.isoformat(),
-                today=today.isoformat(),
-            ),
-        )
-
+        raise RuntimeError("{message} This warning(now exception) triggered on filename '{filename}', line number {lineno}, is supposed to be shown until {date}. Today is {today}. Please remove the warning.".format(message=message.format(date=date.isoformat(), today=today.isoformat()), filename=caller.filename, lineno=caller.lineno, date=date.isoformat(), today=today.isoformat()))
     if _dont_call_warnings is False:
-        warnings.warn(
-            message.format(date=date.isoformat(), today=today.isoformat()),
-            category,
-            stacklevel=stacklevel,
-        )
+        warnings.warn(message.format(date=date.isoformat(), today=today.isoformat()), category, stacklevel=stacklevel)
 
-
-def kwargs_warn_until(
-    kwargs,
-    version,
-    category=DeprecationWarning,
-    stacklevel=None,
-    _version_info_=None,
-    _dont_call_warnings=False,
-):
+def kwargs_warn_until(kwargs, version, category=DeprecationWarning, stacklevel=None, _version_info_=None, _dont_call_warnings=False):
     """
     Helper function to raise a warning (by default, a ``DeprecationWarning``)
     when unhandled keyword arguments are passed to function, until the
@@ -267,39 +170,19 @@ def kwargs_warn_until(
                                 checks to raise a ``RuntimeError``.
     """
     if not isinstance(version, (tuple, str, salt.version.SaltStackVersion)):
-        raise RuntimeError(
-            "The 'version' argument should be passed as a tuple, string or "
-            "an instance of 'salt.version.SaltStackVersion'."
-        )
+        raise RuntimeError("The 'version' argument should be passed as a tuple, string or an instance of 'salt.version.SaltStackVersion'.")
     elif isinstance(version, tuple):
         version = salt.version.SaltStackVersion(*version)
     elif isinstance(version, str):
         version = salt.version.SaltStackVersion.from_name(version)
-
     if stacklevel is None:
-        # Attribute the warning to the calling function,
-        # not to kwargs_warn_until() or warn_until()
         stacklevel = 3
-
     if _version_info_ is None:
         _version_info_ = salt.version.__version_info__
-
     _version_ = salt.version.SaltStackVersion(*_version_info_)
-
     if kwargs or _version_.info >= version.info:
-        arg_names = ", ".join("'{}'".format(key) for key in kwargs)
-        warn_until(
-            version,
-            message=(
-                "The following parameter(s) have been deprecated and "
-                "will be removed in '{}': {}.".format(version.string, arg_names)
-            ),
-            category=category,
-            stacklevel=stacklevel,
-            _version_info_=_version_.info,
-            _dont_call_warnings=_dont_call_warnings,
-        )
-
+        arg_names = ', '.join(("'{}'".format(key) for key in kwargs))
+        warn_until(version, message="The following parameter(s) have been deprecated and will be removed in '{}': {}.".format(version.string, arg_names), category=category, stacklevel=stacklevel, _version_info_=_version_.info, _dont_call_warnings=_dont_call_warnings)
 
 def version_cmp(pkg1, pkg2, ignore_epoch=False):
     """
@@ -309,128 +192,77 @@ def version_cmp(pkg1, pkg2, ignore_epoch=False):
     version2, and 1 if version1 > version2. Return None if there was a problem
     making the comparison.
     """
-    normalize = lambda x: str(x).split(":", 1)[-1] if ignore_epoch else str(x)
+    normalize = lambda x: str(x).split(':', 1)[-1] if ignore_epoch else str(x)
     pkg1 = normalize(pkg1)
     pkg2 = normalize(pkg2)
-
     try:
-        # pylint: disable=no-member
+        log.info('Trace')
         if LooseVersion(pkg1) < LooseVersion(pkg2):
             return -1
         elif LooseVersion(pkg1) == LooseVersion(pkg2):
             return 0
         elif LooseVersion(pkg1) > LooseVersion(pkg2):
             return 1
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:
         log.exception(exc)
     return None
 
-
-def compare(ver1="", oper="==", ver2="", cmp_func=None, ignore_epoch=False):
+def compare(ver1='', oper='==', ver2='', cmp_func=None, ignore_epoch=False):
     """
     Compares two version numbers. Accepts a custom function to perform the
     cmp-style version comparison, otherwise uses version_cmp().
     """
-    cmp_map = {"<": (-1,), "<=": (-1, 0), "==": (0,), ">=": (0, 1), ">": (1,)}
-    if oper not in ("!=",) and oper not in cmp_map:
+    cmp_map = {'<': (-1,), '<=': (-1, 0), '==': (0,), '>=': (0, 1), '>': (1,)}
+    if oper not in ('!=',) and oper not in cmp_map:
         log.error("Invalid operator '%s' for version comparison", oper)
         return False
-
     if cmp_func is None:
         cmp_func = version_cmp
-
     cmp_result = cmp_func(ver1, ver2, ignore_epoch=ignore_epoch)
     if cmp_result is None:
         return False
-
-    # Check if integer/long
     if not isinstance(cmp_result, numbers.Integral):
-        log.error("The version comparison function did not return an integer/long.")
+        log.error('The version comparison function did not return an integer/long.')
         return False
-
-    if oper == "!=":
-        return cmp_result not in cmp_map["=="]
+    if oper == '!=':
+        return cmp_result not in cmp_map['==']
     else:
-        # Gracefully handle cmp_result not in (-1, 0, 1).
         if cmp_result < -1:
             cmp_result = -1
         elif cmp_result > 1:
             cmp_result = 1
-
         return cmp_result in cmp_map[oper]
 
-
-def check_boto_reqs(
-    boto_ver=None, boto3_ver=None, botocore_ver=None, check_boto=True, check_boto3=True
-):
-    """
-    Checks for the version of various required boto libs in one central location. Most
-    boto states and modules rely on a single version of the boto, boto3, or botocore libs.
-    However, some require newer versions of any of these dependencies. This function allows
-    the module to pass in a version to override the default minimum required version.
-
-    This function is useful in centralizing checks for ``__virtual__()`` functions in the
-    various, and many, boto modules and states.
-
-    boto_ver
-        The minimum required version of the boto library. Defaults to ``2.0.0``.
-
-    boto3_ver
-        The minimum required version of the boto3 library. Defaults to ``1.2.6``.
-
-    botocore_ver
-        The minimum required version of the botocore library. Defaults to ``1.3.23``.
-
-    check_boto
-        Boolean defining whether or not to check for boto deps. This defaults to ``True`` as
-        most boto modules/states rely on boto, but some do not.
-
-    check_boto3
-        Boolean defining whether or not to check for boto3 (and therefore botocore) deps.
-        This defaults to ``True`` as most boto modules/states rely on boto3/botocore, but
-        some do not.
-    """
+def check_boto_reqs(boto_ver=None, boto3_ver=None, botocore_ver=None, check_boto=True, check_boto3=True):
+    log.info('Trace')
+    '\n    Checks for the version of various required boto libs in one central location. Most\n    boto states and modules rely on a single version of the boto, boto3, or botocore libs.\n    However, some require newer versions of any of these dependencies. This function allows\n    the module to pass in a version to override the default minimum required version.\n\n    This function is useful in centralizing checks for ``__virtual__()`` functions in the\n    various, and many, boto modules and states.\n\n    boto_ver\n        The minimum required version of the boto library. Defaults to ``2.0.0``.\n\n    boto3_ver\n        The minimum required version of the boto3 library. Defaults to ``1.2.6``.\n\n    botocore_ver\n        The minimum required version of the botocore library. Defaults to ``1.3.23``.\n\n    check_boto\n        Boolean defining whether or not to check for boto deps. This defaults to ``True`` as\n        most boto modules/states rely on boto, but some do not.\n\n    check_boto3\n        Boolean defining whether or not to check for boto3 (and therefore botocore) deps.\n        This defaults to ``True`` as most boto modules/states rely on boto3/botocore, but\n        some do not.\n    '
     if check_boto is True:
         try:
-            # Late import so we can only load these for this function
+            log.info('Trace')
             import boto
-
             has_boto = True
         except ImportError:
+            log.info('Trace')
             has_boto = False
-
         if boto_ver is None:
-            boto_ver = "2.0.0"
-
+            boto_ver = '2.0.0'
         if not has_boto or version_cmp(boto.__version__, boto_ver) == -1:
-            return False, "A minimum version of boto {} is required.".format(boto_ver)
-
+            return (False, 'A minimum version of boto {} is required.'.format(boto_ver))
     if check_boto3 is True:
         try:
-            # Late import so we can only load these for this function
+            log.info('Trace')
             import boto3
             import botocore
-
             has_boto3 = True
         except ImportError:
+            log.info('Trace')
             has_boto3 = False
-
-        # boto_s3_bucket module requires boto3 1.2.6 and botocore 1.3.23 for
-        # idempotent ACL operations via the fix in https://github.com/boto/boto3/issues/390
         if boto3_ver is None:
-            boto3_ver = "1.2.6"
+            boto3_ver = '1.2.6'
         if botocore_ver is None:
-            botocore_ver = "1.3.23"
-
+            botocore_ver = '1.3.23'
         if not has_boto3 or version_cmp(boto3.__version__, boto3_ver) == -1:
-            return (
-                False,
-                "A minimum version of boto3 {} is required.".format(boto3_ver),
-            )
+            return (False, 'A minimum version of boto3 {} is required.'.format(boto3_ver))
         elif version_cmp(botocore.__version__, botocore_ver) == -1:
-            return (
-                False,
-                "A minimum version of botocore {} is required".format(botocore_ver),
-            )
-
+            return (False, 'A minimum version of botocore {} is required'.format(botocore_ver))
     return True

@@ -1,32 +1,24 @@
 """
 Manage the information in the hosts file
 """
-
-
 import errno
 import logging
 import os
-
 import salt.utils.files
 import salt.utils.odict as odict
 import salt.utils.stringutils
-
 log = logging.getLogger(__name__)
 
-
-# pylint: disable=C0103
 def __get_hosts_filename():
-    """
-    Return the path to the appropriate hosts file
-    """
+    log.info('Trace')
+    '\n    Return the path to the appropriate hosts file\n    '
     try:
-        return __context__["hosts.__get_hosts_filename"]
+        log.info('Trace')
+        return __context__['hosts.__get_hosts_filename']
     except KeyError:
-        __context__["hosts.__get_hosts_filename"] = __salt__["config.option"](
-            "hosts.file"
-        )
-        return __context__["hosts.__get_hosts_filename"]
-
+        log.info('Trace')
+        __context__['hosts.__get_hosts_filename'] = __salt__['config.option']('hosts.file')
+        return __context__['hosts.__get_hosts_filename']
 
 def _get_or_create_hostfile():
     """
@@ -35,20 +27,21 @@ def _get_or_create_hostfile():
     """
     hfn = __get_hosts_filename()
     if hfn is None:
-        hfn = ""
+        hfn = ''
     if not os.path.exists(hfn):
-        with salt.utils.files.fopen(hfn, "w"):
+        with salt.utils.files.fopen(hfn, 'w'):
             pass
     return hfn
-
 
 def _list_hosts():
     """
     Return the hosts found in the hosts file in as an OrderedDict
     """
     try:
-        return __context__["hosts._list_hosts"]
+        log.info('Trace')
+        return __context__['hosts._list_hosts']
     except KeyError:
+        log.info('Trace')
         count = 0
         hfn = __get_hosts_filename()
         ret = odict.OrderedDict()
@@ -58,30 +51,26 @@ def _list_hosts():
                     line = salt.utils.stringutils.to_unicode(line).strip()
                     if not line:
                         continue
-                    if line.startswith("#"):
-                        ret.setdefault("comment-{}".format(count), []).append(line)
+                    if line.startswith('#'):
+                        ret.setdefault('comment-{}'.format(count), []).append(line)
                         count += 1
                         continue
                     comment = None
-                    if "#" in line:
-                        comment = line[line.index("#") + 1 :].lstrip()
-                        line = line[: line.index("#")].strip()
+                    if '#' in line:
+                        comment = line[line.index('#') + 1:].lstrip()
+                        line = line[:line.index('#')].strip()
                     comps = line.split()
                     ip = comps.pop(0)
                     if comment:
-                        ret.setdefault(ip, {}).setdefault("aliases", []).extend(comps)
-                        ret.setdefault(ip, {}).update({"comment": comment})
+                        ret.setdefault(ip, {}).setdefault('aliases', []).extend(comps)
+                        ret.setdefault(ip, {}).update({'comment': comment})
                     else:
-                        ret.setdefault(ip, {}).setdefault("aliases", []).extend(comps)
+                        ret.setdefault(ip, {}).setdefault('aliases', []).extend(comps)
         except OSError as exc:
             salt.utils.files.process_read_exception(exc, hfn, ignore=errno.ENOENT)
-            # Don't set __context__ since we weren't able to read from the
-            # hosts file.
             return ret
-
-        __context__["hosts._list_hosts"] = ret
+        __context__['hosts._list_hosts'] = ret
         return ret
-
 
 def list_hosts():
     """
@@ -95,9 +84,7 @@ def list_hosts():
 
         salt '*' hosts.list_hosts
     """
-    # msgpack does not like OrderedDict's
     return dict(_list_hosts())
-
 
 def get_ip(host):
     """
@@ -111,16 +98,13 @@ def get_ip(host):
     """
     hosts = _list_hosts()
     if not hosts:
-        return ""
-    # Look for the op
+        return ''
     for addr in hosts:
-        if isinstance(hosts[addr], dict) and "aliases" in hosts[addr]:
-            _hosts = hosts[addr]["aliases"]
+        if isinstance(hosts[addr], dict) and 'aliases' in hosts[addr]:
+            _hosts = hosts[addr]['aliases']
             if host in _hosts:
                 return addr
-    # ip not found
-    return ""
-
+    return ''
 
 def get_alias(ip):
     """
@@ -138,9 +122,8 @@ def get_alias(ip):
     """
     hosts = _list_hosts()
     if ip in list(hosts):
-        return hosts[ip]["aliases"]
+        return hosts[ip]['aliases']
     return []
-
 
 def has_pair(ip, alias):
     """
@@ -154,13 +137,14 @@ def has_pair(ip, alias):
     """
     hosts = _list_hosts()
     try:
+        log.info('Trace')
         if isinstance(alias, list):
-            return set(alias).issubset(hosts[ip]["aliases"])
+            return set(alias).issubset(hosts[ip]['aliases'])
         else:
-            return alias in hosts[ip]["aliases"]
+            return alias in hosts[ip]['aliases']
     except KeyError:
+        log.info('Trace')
         return False
-
 
 def set_host(ip, alias, comment=None):
     """
@@ -182,46 +166,37 @@ def set_host(ip, alias, comment=None):
     ovr = False
     if not os.path.isfile(hfn):
         return False
-
-    # Make sure future calls to _list_hosts() will re-read the file
-    __context__.pop("hosts._list_hosts", None)
-
+    __context__.pop('hosts._list_hosts', None)
     if comment:
-        line_to_add = salt.utils.stringutils.to_bytes(
-            ip + "\t\t" + alias + "\t\t# " + comment + os.linesep
-        )
+        line_to_add = salt.utils.stringutils.to_bytes(ip + '\t\t' + alias + '\t\t# ' + comment + os.linesep)
     else:
-        line_to_add = salt.utils.stringutils.to_bytes(ip + "\t\t" + alias + os.linesep)
-    # support removing a host entry by providing an empty string
+        line_to_add = salt.utils.stringutils.to_bytes(ip + '\t\t' + alias + os.linesep)
     if not alias.strip():
-        line_to_add = b""
-
-    with salt.utils.files.fopen(hfn, "rb") as fp_:
+        line_to_add = b''
+    with salt.utils.files.fopen(hfn, 'rb') as fp_:
         lines = fp_.readlines()
-    for ind, _ in enumerate(lines):
+    for (ind, _) in enumerate(lines):
         tmpline = lines[ind].strip()
         if not tmpline:
             continue
-        if tmpline.startswith(b"#"):
+        if tmpline.startswith(b'#'):
             continue
         comps = tmpline.split()
         if comps[0] == salt.utils.stringutils.to_bytes(ip):
             if not ovr:
                 lines[ind] = line_to_add
                 ovr = True
-            else:  # remove other entries
-                lines[ind] = b""
+            else:
+                lines[ind] = b''
     linesep_bytes = salt.utils.stringutils.to_bytes(os.linesep)
     if not ovr:
-        # make sure there is a newline
-        if lines and not lines[-1].endswith(linesep_bytes):
+        if lines and (not lines[-1].endswith(linesep_bytes)):
             lines[-1] += linesep_bytes
         line = line_to_add
         lines.append(line)
-    with salt.utils.files.fopen(hfn, "wb") as ofile:
+    with salt.utils.files.fopen(hfn, 'wb') as ofile:
         ofile.writelines(lines)
     return True
-
 
 def rm_host(ip, alias):
     """
@@ -235,21 +210,20 @@ def rm_host(ip, alias):
     """
     if not has_pair(ip, alias):
         return True
-    # Make sure future calls to _list_hosts() will re-read the file
-    __context__.pop("hosts._list_hosts", None)
+    __context__.pop('hosts._list_hosts', None)
     hfn = _get_or_create_hostfile()
-    with salt.utils.files.fopen(hfn, "rb") as fp_:
+    with salt.utils.files.fopen(hfn, 'rb') as fp_:
         lines = fp_.readlines()
-    for ind, _ in enumerate(lines):
+    for (ind, _) in enumerate(lines):
         tmpline = lines[ind].strip()
         if not tmpline:
             continue
-        if tmpline.startswith(b"#"):
+        if tmpline.startswith(b'#'):
             continue
         comps = tmpline.split()
         comment = None
-        if b"#" in tmpline:
-            host_info, comment = tmpline.split(b"#")
+        if b'#' in tmpline:
+            (host_info, comment) = tmpline.split(b'#')
             comment = salt.utils.stringutils.to_bytes(comment).lstrip()
         else:
             host_info = tmpline
@@ -258,29 +232,20 @@ def rm_host(ip, alias):
         b_ip = salt.utils.stringutils.to_bytes(ip)
         b_alias = salt.utils.stringutils.to_bytes(alias)
         if comps[0] == b_ip:
-            newline = comps[0] + b"\t\t"
+            newline = comps[0] + b'\t\t'
             for existing in comps[1:]:
                 if existing == b_alias:
                     continue
-                newline += existing + b" "
+                newline += existing + b' '
             if newline.strip() == b_ip:
-                # No aliases exist for the line, make it empty
-                lines[ind] = b""
+                lines[ind] = b''
+            elif comment:
+                lines[ind] = newline + b'# ' + comment + salt.utils.stringutils.to_bytes(os.linesep)
             else:
-                # Only an alias was removed
-                if comment:
-                    lines[ind] = (
-                        newline
-                        + b"# "
-                        + comment
-                        + salt.utils.stringutils.to_bytes(os.linesep)
-                    )
-                else:
-                    lines[ind] = newline + salt.utils.stringutils.to_bytes(os.linesep)
-    with salt.utils.files.fopen(hfn, "wb") as ofile:
+                lines[ind] = newline + salt.utils.stringutils.to_bytes(os.linesep)
+    with salt.utils.files.fopen(hfn, 'wb') as ofile:
         ofile.writelines(lines)
     return True
-
 
 def add_host(ip, alias):
     """
@@ -296,27 +261,21 @@ def add_host(ip, alias):
     hfn = _get_or_create_hostfile()
     if not os.path.isfile(hfn):
         return False
-
     if has_pair(ip, alias):
         return True
-
     hosts = _list_hosts()
-
-    # Make sure future calls to _list_hosts() will re-read the file
-    __context__.pop("hosts._list_hosts", None)
-
+    __context__.pop('hosts._list_hosts', None)
     inserted = False
-    for i, h in hosts.items():
-        for num, host in enumerate(h):
+    for (i, h) in hosts.items():
+        for (num, host) in enumerate(h):
             if isinstance(h, list):
-                if host.startswith("#") and i == ip:
+                if host.startswith('#') and i == ip:
                     h.insert(num, alias)
                     inserted = True
     if not inserted:
-        hosts.setdefault(ip, {}).setdefault("aliases", []).append(alias)
+        hosts.setdefault(ip, {}).setdefault('aliases', []).append(alias)
     _write_hosts(hosts)
     return True
-
 
 def set_comment(ip, comment):
     """
@@ -332,48 +291,34 @@ def set_comment(ip, comment):
     hfn = _get_or_create_hostfile()
     if not os.path.isfile(hfn):
         return False
-
     hosts = _list_hosts()
-
-    # Make sure future calls to _list_hosts() will re-read the file
-    __context__.pop("hosts._list_hosts", None)
-
+    __context__.pop('hosts._list_hosts', None)
     if ip not in hosts:
         return False
-
-    if "comment" in hosts[ip]:
-        if comment != hosts[ip]["comment"]:
-            hosts[ip]["comment"] = comment
+    if 'comment' in hosts[ip]:
+        if comment != hosts[ip]['comment']:
+            hosts[ip]['comment'] = comment
             _write_hosts(hosts)
         else:
             return True
     else:
-        hosts[ip]["comment"] = comment
+        hosts[ip]['comment'] = comment
         _write_hosts(hosts)
     return True
 
-
 def _write_hosts(hosts):
     lines = []
-    for ip, host_info in hosts.items():
+    for (ip, host_info) in hosts.items():
         if ip:
-            if ip.startswith("comment"):
-                line = "".join(host_info)
+            if ip.startswith('comment'):
+                line = ''.join(host_info)
+            elif 'comment' in host_info:
+                line = '{}\t\t{}\t\t# {}'.format(ip, ' '.join(host_info['aliases']), host_info['comment'])
             else:
-                if "comment" in host_info:
-                    line = "{}\t\t{}\t\t# {}".format(
-                        ip, " ".join(host_info["aliases"]), host_info["comment"]
-                    )
-                else:
-                    line = "{}\t\t{}".format(ip, " ".join(host_info["aliases"]))
+                line = '{}\t\t{}'.format(ip, ' '.join(host_info['aliases']))
         lines.append(line)
-
     hfn = _get_or_create_hostfile()
-    with salt.utils.files.fopen(hfn, "w+") as ofile:
+    with salt.utils.files.fopen(hfn, 'w+') as ofile:
         for line in lines:
             if line.strip():
-                # /etc/hosts needs to end with a newline so that some utils
-                # that read it do not break
-                ofile.write(
-                    salt.utils.stringutils.to_str(line.strip() + str(os.linesep))
-                )
+                ofile.write(salt.utils.stringutils.to_str(line.strip() + str(os.linesep)))

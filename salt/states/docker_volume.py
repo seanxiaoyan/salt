@@ -29,195 +29,98 @@ Management of Docker volumes
 These states were moved from the :mod:`docker <salt.states.docker>` state
 module (formerly called **dockerng**) in the 2017.7.0 release.
 """
-
 import logging
-
 import salt.utils.data
-
-# Enable proper logging
-log = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-# Define the module's virtual name
-__virtualname__ = "docker_volume"
-__virtual_aliases__ = ("moby_volume",)
-
+log = logging.getLogger(__name__)
+__virtualname__ = 'docker_volume'
+__virtual_aliases__ = ('moby_volume',)
 
 def __virtual__():
     """
     Only load if the docker execution module is available
     """
-    if "docker.version" in __salt__:
+    if 'docker.version' in __salt__:
         return __virtualname__
-    return (False, __salt__.missing_fun_string("docker.version"))
-
+    return (False, __salt__.missing_fun_string('docker.version'))
 
 def _find_volume(name):
     """
     Find volume by name on minion
     """
-    docker_volumes = __salt__["docker.volumes"]()["Volumes"]
+    docker_volumes = __salt__['docker.volumes']()['Volumes']
     if docker_volumes:
-        volumes = [v for v in docker_volumes if v["Name"] == name]
+        volumes = [v for v in docker_volumes if v['Name'] == name]
         if volumes:
             return volumes[0]
-
     return None
 
-
 def present(name, driver=None, driver_opts=None, force=False):
-    """
-    Ensure that a volume is present.
-
-    .. versionadded:: 2015.8.4
-    .. versionchanged:: 2015.8.6
-        This state no longer deletes and re-creates a volume if the existing
-        volume's driver does not match the ``driver`` parameter (unless the
-        ``force`` parameter is set to ``True``).
-    .. versionchanged:: 2017.7.0
-        This state was renamed from **docker.volume_present** to **docker_volume.present**
-
-    name
-        Name of the volume
-
-    driver
-        Type of driver for that volume.  If ``None`` and the volume
-        does not yet exist, the volume will be created using Docker's
-        default driver.  If ``None`` and the volume does exist, this
-        function does nothing, even if the existing volume's driver is
-        not the Docker default driver.  (To ensure that an existing
-        volume's driver matches the Docker default, you must
-        explicitly name Docker's default driver here.)
-
-    driver_opts
-        Options for the volume driver
-
-    force : False
-        If the volume already exists but the existing volume's driver
-        does not match the driver specified by the ``driver``
-        parameter, this parameter controls whether the function errors
-        out (if ``False``) or deletes and re-creates the volume (if
-        ``True``).
-
-        .. versionadded:: 2015.8.6
-
-    Usage Examples:
-
-    .. code-block:: yaml
-
-        volume_foo:
-          docker_volume.present
-
-
-    .. code-block:: yaml
-
-        volume_bar:
-          docker_volume.present
-            - name: bar
-            - driver: local
-            - driver_opts:
-                foo: bar
-
-    .. code-block:: yaml
-
-        volume_bar:
-          docker_volume.present
-            - name: bar
-            - driver: local
-            - driver_opts:
-                - foo: bar
-                - option: value
-
-    """
-    ret = {"name": name, "changes": {}, "result": False, "comment": ""}
+    log.info('Trace')
+    "\n    Ensure that a volume is present.\n\n    .. versionadded:: 2015.8.4\n    .. versionchanged:: 2015.8.6\n        This state no longer deletes and re-creates a volume if the existing\n        volume's driver does not match the ``driver`` parameter (unless the\n        ``force`` parameter is set to ``True``).\n    .. versionchanged:: 2017.7.0\n        This state was renamed from **docker.volume_present** to **docker_volume.present**\n\n    name\n        Name of the volume\n\n    driver\n        Type of driver for that volume.  If ``None`` and the volume\n        does not yet exist, the volume will be created using Docker's\n        default driver.  If ``None`` and the volume does exist, this\n        function does nothing, even if the existing volume's driver is\n        not the Docker default driver.  (To ensure that an existing\n        volume's driver matches the Docker default, you must\n        explicitly name Docker's default driver here.)\n\n    driver_opts\n        Options for the volume driver\n\n    force : False\n        If the volume already exists but the existing volume's driver\n        does not match the driver specified by the ``driver``\n        parameter, this parameter controls whether the function errors\n        out (if ``False``) or deletes and re-creates the volume (if\n        ``True``).\n\n        .. versionadded:: 2015.8.6\n\n    Usage Examples:\n\n    .. code-block:: yaml\n\n        volume_foo:\n          docker_volume.present\n\n\n    .. code-block:: yaml\n\n        volume_bar:\n          docker_volume.present\n            - name: bar\n            - driver: local\n            - driver_opts:\n                foo: bar\n\n    .. code-block:: yaml\n\n        volume_bar:\n          docker_volume.present\n            - name: bar\n            - driver: local\n            - driver_opts:\n                - foo: bar\n                - option: value\n\n    "
+    ret = {'name': name, 'changes': {}, 'result': False, 'comment': ''}
     if salt.utils.data.is_dictlist(driver_opts):
         driver_opts = salt.utils.data.repack_dictlist(driver_opts)
     volume = _find_volume(name)
     if not volume:
-        if __opts__["test"]:
-            ret["result"] = None
-            ret["comment"] = "The volume '{}' will be created".format(name)
+        if __opts__['test']:
+            ret['result'] = None
+            ret['comment'] = "The volume '{}' will be created".format(name)
             return ret
         try:
-            ret["changes"]["created"] = __salt__["docker.create_volume"](
-                name, driver=driver, driver_opts=driver_opts
-            )
-        except Exception as exc:  # pylint: disable=broad-except
-            ret["comment"] = "Failed to create volume '{}': {}".format(name, exc)
+            log.info('Trace')
+            ret['changes']['created'] = __salt__['docker.create_volume'](name, driver=driver, driver_opts=driver_opts)
+        except Exception as exc:
+            log.info('Trace')
+            ret['comment'] = "Failed to create volume '{}': {}".format(name, exc)
             return ret
         else:
             result = True
-            ret["result"] = result
+            ret['result'] = result
             return ret
-    # volume exists, check if driver is the same.
-    if driver is not None and volume["Driver"] != driver:
+    if driver is not None and volume['Driver'] != driver:
         if not force:
-            ret["comment"] = (
-                "Driver for existing volume '{}' ('{}')"
-                " does not match specified driver ('{}')"
-                " and force is False".format(name, volume["Driver"], driver)
-            )
-            ret["result"] = None if __opts__["test"] else False
+            ret['comment'] = "Driver for existing volume '{}' ('{}') does not match specified driver ('{}') and force is False".format(name, volume['Driver'], driver)
+            ret['result'] = None if __opts__['test'] else False
             return ret
-        if __opts__["test"]:
-            ret["result"] = None
-            ret["comment"] = (
-                "The volume '{}' will be replaced with a"
-                " new one using the driver '{}'".format(name, volume)
-            )
+        if __opts__['test']:
+            ret['result'] = None
+            ret['comment'] = "The volume '{}' will be replaced with a new one using the driver '{}'".format(name, volume)
             return ret
         try:
-            ret["changes"]["removed"] = __salt__["docker.remove_volume"](name)
-        except Exception as exc:  # pylint: disable=broad-except
-            ret["comment"] = "Failed to remove volume '{}': {}".format(name, exc)
+            log.info('Trace')
+            ret['changes']['removed'] = __salt__['docker.remove_volume'](name)
+        except Exception as exc:
+            log.info('Trace')
+            ret['comment'] = "Failed to remove volume '{}': {}".format(name, exc)
             return ret
         else:
             try:
-                ret["changes"]["created"] = __salt__["docker.create_volume"](
-                    name, driver=driver, driver_opts=driver_opts
-                )
-            except Exception as exc:  # pylint: disable=broad-except
-                ret["comment"] = "Failed to create volume '{}': {}".format(name, exc)
+                ret['changes']['created'] = __salt__['docker.create_volume'](name, driver=driver, driver_opts=driver_opts)
+            except Exception as exc:
+                ret['comment'] = "Failed to create volume '{}': {}".format(name, exc)
                 return ret
             else:
                 result = True
-                ret["result"] = result
+                ret['result'] = result
                 return ret
-
-    ret["result"] = True
-    ret["comment"] = "Volume '{}' already exists.".format(name)
+    ret['result'] = True
+    ret['comment'] = "Volume '{}' already exists.".format(name)
     return ret
 
-
 def absent(name, driver=None):
-    """
-    Ensure that a volume is absent.
-
-    .. versionadded:: 2015.8.4
-    .. versionchanged:: 2017.7.0
-        This state was renamed from **docker.volume_absent** to **docker_volume.absent**
-
-    name
-        Name of the volume
-
-    Usage Examples:
-
-    .. code-block:: yaml
-
-        volume_foo:
-          docker_volume.absent
-
-    """
-    ret = {"name": name, "changes": {}, "result": False, "comment": ""}
-
+    log.info('Trace')
+    '\n    Ensure that a volume is absent.\n\n    .. versionadded:: 2015.8.4\n    .. versionchanged:: 2017.7.0\n        This state was renamed from **docker.volume_absent** to **docker_volume.absent**\n\n    name\n        Name of the volume\n\n    Usage Examples:\n\n    .. code-block:: yaml\n\n        volume_foo:\n          docker_volume.absent\n\n    '
+    ret = {'name': name, 'changes': {}, 'result': False, 'comment': ''}
     volume = _find_volume(name)
     if not volume:
-        ret["result"] = True
-        ret["comment"] = "Volume '{}' already absent".format(name)
+        ret['result'] = True
+        ret['comment'] = "Volume '{}' already absent".format(name)
         return ret
-
     try:
-        ret["changes"]["removed"] = __salt__["docker.remove_volume"](name)
-        ret["result"] = True
-    except Exception as exc:  # pylint: disable=broad-except
-        ret["comment"] = "Failed to remove volume '{}': {}".format(name, exc)
+        log.info('Trace')
+        ret['changes']['removed'] = __salt__['docker.remove_volume'](name)
+        ret['result'] = True
+    except Exception as exc:
+        log.info('Trace')
+        ret['comment'] = "Failed to remove volume '{}': {}".format(name, exc)
     return ret

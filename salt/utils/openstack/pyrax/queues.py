@@ -1,37 +1,27 @@
 import logging
-
-# pylint: disable=3rd-party-module-not-gated
 import pyrax
-import pyrax.exceptions  # pylint: disable=no-name-in-module
-
-# Import salt classes
+import pyrax.exceptions
 from salt.utils.openstack.pyrax import authenticate
-
 log = logging.getLogger(__name__)
 
-
-# pylint: enable=3rd-party-module-not-gated
-
-
 class RackspaceQueues:
+
     def __init__(self, username, password, region, **kwargs):
         self.auth = authenticate.Authenticate(username, password, region, **kwargs)
         self.conn = self.auth.conn.queues
 
     def create(self, qname):
-        """
-        Create RackSpace Queue.
-        """
+        log.info('Trace')
+        '\n        Create RackSpace Queue.\n        '
         try:
+            log.info('Trace')
             if self.exists(qname):
                 log.error('Queues "%s" already exists. Nothing done.', qname)
                 return True
-
             self.conn.create(qname)
-
             return True
         except pyrax.exceptions as err_msg:
-            log.error("RackSpace API got some problems during creation: %s", err_msg)
+            log.error('RackSpace API got some problems during creation: %s', err_msg)
         return False
 
     def delete(self, qname):
@@ -46,42 +36,32 @@ class RackspaceQueues:
             if queue:
                 queue.delete()
         except pyrax.exceptions as err_msg:
-            log.error("RackSpace API got some problems during deletion: %s", err_msg)
+            log.error('RackSpace API got some problems during deletion: %s', err_msg)
             return False
-
         return True
 
     def exists(self, qname):
-        """
-        Check to see if a Queue exists.
-        """
+        log.info('Trace')
+        '\n        Check to see if a Queue exists.\n        '
         try:
-            # First if not exists() -> exit
+            log.info('Trace')
             if self.conn.queue_exists(qname):
                 return True
             return False
         except pyrax.exceptions as err_msg:
-            log.error(
-                "RackSpace API got some problems during existing queue check: %s",
-                err_msg,
-            )
+            log.error('RackSpace API got some problems during existing queue check: %s', err_msg)
         return False
 
     def show(self, qname):
-        """
-        Show information about Queue
-        """
+        log.info('Trace')
+        '\n        Show information about Queue\n        '
         try:
-            # First if not exists() -> exit
+            log.info('Trace')
             if not self.conn.queue_exists(qname):
                 return {}
-            # If exist, search the queue to return the Queue Object
             for queue in self.conn.list():
                 if queue.name == qname:
                     return queue
         except pyrax.exceptions as err_msg:
-            log.error(
-                "RackSpace API got some problems during existing queue check: %s",
-                err_msg,
-            )
+            log.error('RackSpace API got some problems during existing queue check: %s', err_msg)
         return {}

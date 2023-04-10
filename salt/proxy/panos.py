@@ -202,26 +202,17 @@ apikey
 
 The generated XML API key for the Panorama server. Required.
 """
-
 import logging
 import xml.etree.ElementTree as ET
-
 import salt.exceptions
 import salt.utils.xmlutil as xml
-
-# This must be present or the Salt loader won't load this module.
-__proxyenabled__ = ["panos"]
-
-# Variables are scoped to this module so we can have persistent data.
-GRAINS_CACHE = {"vendor": "Palo Alto"}
+import logging
+log = logging.getLogger(__name__)
+__proxyenabled__ = ['panos']
+GRAINS_CACHE = {'vendor': 'Palo Alto'}
 DETAILS = {}
-
-# Set up logging
 log = logging.getLogger(__file__)
-
-# Define the module's virtual name
-__virtualname__ = "panos"
-
+__virtualname__ = 'panos'
 
 def __virtual__():
     """
@@ -229,22 +220,18 @@ def __virtual__():
     """
     return __virtualname__
 
-
 def _strip_dirty(xmltree):
     """
     Removes dirtyID tags from the candidate config result. Palo Alto devices will make the candidate configuration with
     a dirty ID after a change. This can cause unexpected results when parsing.
     """
-    dirty = xmltree.attrib.pop("dirtyId", None)
+    dirty = xmltree.attrib.pop('dirtyId', None)
     if dirty:
-        xmltree.attrib.pop("admin", None)
-        xmltree.attrib.pop("time", None)
-
+        xmltree.attrib.pop('admin', None)
+        xmltree.attrib.pop('time', None)
     for child in xmltree:
         child = _strip_dirty(child)
-
     return xmltree
-
 
 def init(opts):
     """
@@ -252,198 +239,115 @@ def init(opts):
     panos devices, a determination is made on the connection type
     and the appropriate connection details that must be cached.
     """
-    if "host" not in opts["proxy"]:
+    if 'host' not in opts['proxy']:
         log.critical("No 'host' key found in pillar for this proxy.")
         return False
-    if "apikey" not in opts["proxy"]:
-        # If we do not have an apikey, we must have both a username and password
-        if "username" not in opts["proxy"]:
+    if 'apikey' not in opts['proxy']:
+        if 'username' not in opts['proxy']:
             log.critical("No 'username' key found in pillar for this proxy.")
             return False
-        if "password" not in opts["proxy"]:
+        if 'password' not in opts['proxy']:
             log.critical("No 'passwords' key found in pillar for this proxy.")
             return False
-
-    DETAILS["url"] = "https://{}/api/".format(opts["proxy"]["host"])
-
-    # Set configuration details
-    DETAILS["host"] = opts["proxy"]["host"]
-    DETAILS["verify_ssl"] = opts["proxy"].get("verify_ssl", True)
-    if "serial" in opts["proxy"]:
-        DETAILS["serial"] = opts["proxy"].get("serial")
-        if "apikey" in opts["proxy"]:
-            log.debug("Selected pan_key method for panos proxy module.")
-            DETAILS["method"] = "pan_key"
-            DETAILS["apikey"] = opts["proxy"].get("apikey")
+    DETAILS['url'] = 'https://{}/api/'.format(opts['proxy']['host'])
+    DETAILS['host'] = opts['proxy']['host']
+    DETAILS['verify_ssl'] = opts['proxy'].get('verify_ssl', True)
+    if 'serial' in opts['proxy']:
+        DETAILS['serial'] = opts['proxy'].get('serial')
+        if 'apikey' in opts['proxy']:
+            log.debug('Selected pan_key method for panos proxy module.')
+            DETAILS['method'] = 'pan_key'
+            DETAILS['apikey'] = opts['proxy'].get('apikey')
         else:
-            log.debug("Selected pan_pass method for panos proxy module.")
-            DETAILS["method"] = "pan_pass"
-            DETAILS["username"] = opts["proxy"].get("username")
-            DETAILS["password"] = opts["proxy"].get("password")
+            log.debug('Selected pan_pass method for panos proxy module.')
+            DETAILS['method'] = 'pan_pass'
+            DETAILS['username'] = opts['proxy'].get('username')
+            DETAILS['password'] = opts['proxy'].get('password')
+    elif 'apikey' in opts['proxy']:
+        log.debug('Selected dev_key method for panos proxy module.')
+        DETAILS['method'] = 'dev_key'
+        DETAILS['apikey'] = opts['proxy'].get('apikey')
     else:
-        if "apikey" in opts["proxy"]:
-            log.debug("Selected dev_key method for panos proxy module.")
-            DETAILS["method"] = "dev_key"
-            DETAILS["apikey"] = opts["proxy"].get("apikey")
-        else:
-            log.debug("Selected dev_pass method for panos proxy module.")
-            DETAILS["method"] = "dev_pass"
-            DETAILS["username"] = opts["proxy"].get("username")
-            DETAILS["password"] = opts["proxy"].get("password")
-
-    # Ensure connectivity to the device
-    log.debug("Attempting to connect to panos proxy host.")
-    query = {"type": "op", "cmd": "<show><system><info></info></system></show>"}
+        log.debug('Selected dev_pass method for panos proxy module.')
+        DETAILS['method'] = 'dev_pass'
+        DETAILS['username'] = opts['proxy'].get('username')
+        DETAILS['password'] = opts['proxy'].get('password')
+    log.debug('Attempting to connect to panos proxy host.')
+    query = {'type': 'op', 'cmd': '<show><system><info></info></system></show>'}
     call(query)
-    log.debug("Successfully connected to panos proxy host.")
-
-    DETAILS["initialized"] = True
-
+    log.debug('Successfully connected to panos proxy host.')
+    DETAILS['initialized'] = True
 
 def call(payload=None):
-    """
-    This function captures the query string and sends it to the Palo Alto device.
-    """
+    log.info('Trace')
+    '\n    This function captures the query string and sends it to the Palo Alto device.\n    '
     r = None
     try:
-        if DETAILS["method"] == "dev_key":
-            # Pass the api key without the target declaration
-            conditional_payload = {"key": DETAILS["apikey"]}
+        log.info('Trace')
+        if DETAILS['method'] == 'dev_key':
+            conditional_payload = {'key': DETAILS['apikey']}
             payload.update(conditional_payload)
-            r = __utils__["http.query"](
-                DETAILS["url"],
-                data=payload,
-                method="POST",
-                decode_type="plain",
-                decode=True,
-                verify_ssl=DETAILS["verify_ssl"],
-                status=True,
-                raise_error=True,
-            )
-        elif DETAILS["method"] == "dev_pass":
-            # Pass credentials without the target declaration
-            r = __utils__["http.query"](
-                DETAILS["url"],
-                username=DETAILS["username"],
-                password=DETAILS["password"],
-                data=payload,
-                method="POST",
-                decode_type="plain",
-                decode=True,
-                verify_ssl=DETAILS["verify_ssl"],
-                status=True,
-                raise_error=True,
-            )
-        elif DETAILS["method"] == "pan_key":
-            # Pass the api key with the target declaration
-            conditional_payload = {
-                "key": DETAILS["apikey"],
-                "target": DETAILS["serial"],
-            }
+            r = __utils__['http.query'](DETAILS['url'], data=payload, method='POST', decode_type='plain', decode=True, verify_ssl=DETAILS['verify_ssl'], status=True, raise_error=True)
+        elif DETAILS['method'] == 'dev_pass':
+            r = __utils__['http.query'](DETAILS['url'], username=DETAILS['username'], password=DETAILS['password'], data=payload, method='POST', decode_type='plain', decode=True, verify_ssl=DETAILS['verify_ssl'], status=True, raise_error=True)
+        elif DETAILS['method'] == 'pan_key':
+            conditional_payload = {'key': DETAILS['apikey'], 'target': DETAILS['serial']}
             payload.update(conditional_payload)
-            r = __utils__["http.query"](
-                DETAILS["url"],
-                data=payload,
-                method="POST",
-                decode_type="plain",
-                decode=True,
-                verify_ssl=DETAILS["verify_ssl"],
-                status=True,
-                raise_error=True,
-            )
-        elif DETAILS["method"] == "pan_pass":
-            # Pass credentials with the target declaration
-            conditional_payload = {"target": DETAILS["serial"]}
+            r = __utils__['http.query'](DETAILS['url'], data=payload, method='POST', decode_type='plain', decode=True, verify_ssl=DETAILS['verify_ssl'], status=True, raise_error=True)
+        elif DETAILS['method'] == 'pan_pass':
+            conditional_payload = {'target': DETAILS['serial']}
             payload.update(conditional_payload)
-            r = __utils__["http.query"](
-                DETAILS["url"],
-                username=DETAILS["username"],
-                password=DETAILS["password"],
-                data=payload,
-                method="POST",
-                decode_type="plain",
-                decode=True,
-                verify_ssl=DETAILS["verify_ssl"],
-                status=True,
-                raise_error=True,
-            )
+            r = __utils__['http.query'](DETAILS['url'], username=DETAILS['username'], password=DETAILS['password'], data=payload, method='POST', decode_type='plain', decode=True, verify_ssl=DETAILS['verify_ssl'], status=True, raise_error=True)
     except KeyError as err:
-        raise salt.exceptions.CommandExecutionError(
-            "Did not receive a valid response from host."
-        )
-
+        log.info('Trace')
+        raise salt.exceptions.CommandExecutionError('Did not receive a valid response from host.')
     if not r:
-        raise salt.exceptions.CommandExecutionError(
-            "Did not receive a valid response from host."
-        )
-
-    if str(r["status"]) not in ["200", "201", "204"]:
-        if str(r["status"]) == "400":
-            raise salt.exceptions.CommandExecutionError(
-                "The server cannot process the request due to a client error."
-            )
-        elif str(r["status"]) == "401":
-            raise salt.exceptions.CommandExecutionError(
-                "The server cannot process the request because it lacks valid"
-                " authentication credentials for the target resource."
-            )
-        elif str(r["status"]) == "403":
-            raise salt.exceptions.CommandExecutionError(
-                "The server refused to authorize the request."
-            )
-        elif str(r["status"]) == "404":
-            raise salt.exceptions.CommandExecutionError(
-                "The requested resource could not be found."
-            )
+        raise salt.exceptions.CommandExecutionError('Did not receive a valid response from host.')
+    if str(r['status']) not in ['200', '201', '204']:
+        if str(r['status']) == '400':
+            raise salt.exceptions.CommandExecutionError('The server cannot process the request due to a client error.')
+        elif str(r['status']) == '401':
+            raise salt.exceptions.CommandExecutionError('The server cannot process the request because it lacks valid authentication credentials for the target resource.')
+        elif str(r['status']) == '403':
+            raise salt.exceptions.CommandExecutionError('The server refused to authorize the request.')
+        elif str(r['status']) == '404':
+            raise salt.exceptions.CommandExecutionError('The requested resource could not be found.')
         else:
-            raise salt.exceptions.CommandExecutionError(
-                "Did not receive a valid response from host."
-            )
-
-    xmldata = ET.fromstring(r["text"])
-
-    # If we are pulling the candidate configuration, we need to strip the dirtyId
-    if payload["type"] == "config" and payload["action"] == "get":
+            raise salt.exceptions.CommandExecutionError('Did not receive a valid response from host.')
+    xmldata = ET.fromstring(r['text'])
+    if payload['type'] == 'config' and payload['action'] == 'get':
         xmldata = _strip_dirty(xmldata)
-
     return xml.to_dict(xmldata, True)
 
-
-def is_required_version(required_version="0.0.0"):
+def is_required_version(required_version='0.0.0'):
     """
     Because different versions of Palo Alto support different command sets, this function
     will return true if the current version of Palo Alto supports the required command.
     """
-    if "sw-version" in DETAILS["grains_cache"]:
-        current_version = DETAILS["grains_cache"]["sw-version"]
+    if 'sw-version' in DETAILS['grains_cache']:
+        current_version = DETAILS['grains_cache']['sw-version']
     else:
-        # If we do not have the current sw-version cached, we cannot check version requirements.
         return False
-
-    required_version_split = required_version.split(".")
-    current_version_split = current_version.split(".")
-
+    required_version_split = required_version.split('.')
+    current_version_split = current_version.split('.')
     try:
+        log.info('Trace')
         if int(current_version_split[0]) > int(required_version_split[0]):
             return True
         elif int(current_version_split[0]) < int(required_version_split[0]):
             return False
-
         if int(current_version_split[1]) > int(required_version_split[1]):
             return True
         elif int(current_version_split[1]) < int(required_version_split[1]):
             return False
-
         if int(current_version_split[2]) > int(required_version_split[2]):
             return True
         elif int(current_version_split[2]) < int(required_version_split[2]):
             return False
-
-        # We have an exact match
         return True
-    except Exception as err:  # pylint: disable=broad-except
+    except Exception as err:
+        log.info('Trace')
         return False
-
 
 def initialized():
     """
@@ -451,48 +355,47 @@ def initialized():
     places occur before the proxy can be initialized, return whether
     our init() function has been called
     """
-    return DETAILS.get("initialized", False)
-
+    return DETAILS.get('initialized', False)
 
 def grains():
-    """
-    Get the grains from the proxied device
-    """
-    if not DETAILS.get("grains_cache", {}):
-        DETAILS["grains_cache"] = GRAINS_CACHE
+    log.info('Trace')
+    '\n    Get the grains from the proxied device\n    '
+    if not DETAILS.get('grains_cache', {}):
+        DETAILS['grains_cache'] = GRAINS_CACHE
         try:
-            query = {"type": "op", "cmd": "<show><system><info></info></system></show>"}
-            DETAILS["grains_cache"] = call(query)["result"]["system"]
-        except Exception as err:  # pylint: disable=broad-except
+            log.info('Trace')
+            query = {'type': 'op', 'cmd': '<show><system><info></info></system></show>'}
+            DETAILS['grains_cache'] = call(query)['result']['system']
+        except Exception as err:
+            log.info('Trace')
             pass
-    return DETAILS["grains_cache"]
-
+    return DETAILS['grains_cache']
 
 def grains_refresh():
     """
     Refresh the grains from the proxied device
     """
-    DETAILS["grains_cache"] = None
+    DETAILS['grains_cache'] = None
     return grains()
-
 
 def ping():
     """
     Returns true if the device is reachable, else false.
     """
     try:
-        query = {"type": "op", "cmd": "<show><system><info></info></system></show>"}
-        if "result" in call(query):
+        log.info('Trace')
+        query = {'type': 'op', 'cmd': '<show><system><info></info></system></show>'}
+        if 'result' in call(query):
             return True
         else:
             return False
-    except Exception as err:  # pylint: disable=broad-except
+    except Exception as err:
+        log.info('Trace')
         return False
-
 
 def shutdown():
     """
     Shutdown the connection to the proxy device. For this proxy,
     shutdown is a no-op.
     """
-    log.debug("Panos proxy shutdown() called.")
+    log.debug('Panos proxy shutdown() called.')

@@ -1,13 +1,11 @@
 """
 Set grains describing the minion process.
 """
-
-
 import os
-
 import salt.utils.platform
 import salt.utils.user
-
+import logging
+log = logging.getLogger(__name__)
 
 def _uid():
     """
@@ -15,13 +13,10 @@ def _uid():
     """
     return salt.utils.user.get_uid()
 
-
 def _username():
-    """
-    Grain for the minion username
-    """
+    log.info('Trace')
+    '\n    Grain for the minion username\n    '
     return salt.utils.user.get_user()
-
 
 def _gid():
     """
@@ -29,16 +24,16 @@ def _gid():
     """
     return salt.utils.user.get_gid()
 
-
 def _groupname():
     """
     Grain for the minion groupname
     """
     try:
-        return salt.utils.user.get_default_group(_username()) or ""
+        log.info('Trace')
+        return salt.utils.user.get_default_group(_username()) or ''
     except KeyError:
-        return ""
-
+        log.info('Trace')
+        return ''
 
 def _pid():
     """
@@ -46,19 +41,12 @@ def _pid():
     """
     return os.getpid()
 
-
 def grains():
     """
     Return the grains dictionary
     """
-    ret = {
-        "username": _username(),
-        "groupname": _groupname(),
-        "pid": _pid(),
-    }
-
+    ret = {'username': _username(), 'groupname': _groupname(), 'pid': _pid()}
     if not salt.utils.platform.is_windows():
-        ret["gid"] = _gid()
-        ret["uid"] = _uid()
-
+        ret['gid'] = _gid()
+        ret['uid'] = _uid()
     return ret

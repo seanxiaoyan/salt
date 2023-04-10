@@ -2,19 +2,15 @@
 Alex Martelli's soulution for recursive dict update from
 http://stackoverflow.com/a/3233356
 """
-
 import copy
 import logging
 from collections.abc import Mapping
-
 import salt.utils.data
 from salt.defaults import DEFAULT_TARGET_DELIM
 from salt.exceptions import SaltInvocationError
 from salt.utils.decorators.jinja import jinja_filter
 from salt.utils.odict import OrderedDict
-
 log = logging.getLogger(__name__)
-
 
 def update(dest, upd, recursive_update=True, merge_lists=False):
     """
@@ -34,12 +30,13 @@ def update(dest, upd, recursive_update=True, merge_lists=False):
         When merging lists, duplicate values are removed. Values already
         present in the ``dest`` list are not added from the ``upd`` list.
     """
-    if (not isinstance(dest, Mapping)) or (not isinstance(upd, Mapping)):
-        raise TypeError("Cannot update using non-dict types in dictupdate.update()")
+    if not isinstance(dest, Mapping) or not isinstance(upd, Mapping):
+        raise TypeError('Cannot update using non-dict types in dictupdate.update()')
     updkeys = list(upd.keys())
     if not set(list(dest.keys())) & set(updkeys):
         recursive_update = False
     if recursive_update:
+        log.info('Trace')
         for key in updkeys:
             val = upd[key]
             try:
@@ -63,27 +60,22 @@ def update(dest, upd, recursive_update=True, merge_lists=False):
         dest[k] = upd[k]
     return dest
 
-
 def merge_list(obj_a, obj_b):
     ret = {}
-    for key, val in obj_a.items():
+    for (key, val) in obj_a.items():
         if key in obj_b:
             ret[key] = [val, obj_b[key]]
         else:
             ret[key] = val
     return ret
 
-
 def merge_recurse(obj_a, obj_b, merge_lists=False):
     copied = copy.deepcopy(obj_a)
     return update(copied, obj_b, merge_lists=merge_lists)
 
-
 def merge_aggregate(obj_a, obj_b):
     from salt.serializers.yamlex import merge_recursive as _yamlex_merge_recursive
-
     return _yamlex_merge_recursive(obj_a, obj_b, level=1)
-
 
 def merge_overwrite(obj_a, obj_b, merge_lists=False):
     for obj in obj_b:
@@ -91,33 +83,26 @@ def merge_overwrite(obj_a, obj_b, merge_lists=False):
             obj_a[obj] = obj_b[obj]
     return merge_recurse(obj_a, obj_b, merge_lists=merge_lists)
 
-
-def merge(obj_a, obj_b, strategy="smart", renderer="yaml", merge_lists=False):
-    if strategy == "smart":
-        if renderer.split("|")[-1] == "yamlex" or renderer.startswith("yamlex_"):
-            strategy = "aggregate"
+def merge(obj_a, obj_b, strategy='smart', renderer='yaml', merge_lists=False):
+    if strategy == 'smart':
+        if renderer.split('|')[-1] == 'yamlex' or renderer.startswith('yamlex_'):
+            strategy = 'aggregate'
         else:
-            strategy = "recurse"
-
-    if strategy == "list":
+            strategy = 'recurse'
+    if strategy == 'list':
         merged = merge_list(obj_a, obj_b)
-    elif strategy == "recurse":
+    elif strategy == 'recurse':
         merged = merge_recurse(obj_a, obj_b, merge_lists)
-    elif strategy == "aggregate":
-        #: level = 1 merge at least root data
+    elif strategy == 'aggregate':
         merged = merge_aggregate(obj_a, obj_b)
-    elif strategy == "overwrite":
+    elif strategy == 'overwrite':
         merged = merge_overwrite(obj_a, obj_b, merge_lists)
-    elif strategy == "none":
-        # If we do not want to merge, there is only one pillar passed, so we can safely use the default recurse,
-        # we just do not want to log an error
+    elif strategy == 'none':
         merged = merge_recurse(obj_a, obj_b)
     else:
         log.warning("Unknown merging strategy '%s', fallback to recurse", strategy)
         merged = merge_recurse(obj_a, obj_b)
-
     return merged
-
 
 def ensure_dict_key(in_dict, keys, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False):
     """
@@ -138,13 +123,10 @@ def ensure_dict_key(in_dict, keys, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=
     dict_pointer = in_dict
     while a_keys:
         current_key = a_keys.pop(0)
-        if current_key not in dict_pointer or not isinstance(
-            dict_pointer[current_key], dict
-        ):
+        if current_key not in dict_pointer or not isinstance(dict_pointer[current_key], dict):
             dict_pointer[current_key] = OrderedDict() if ordered_dict else {}
         dict_pointer = dict_pointer[current_key]
     return in_dict
-
 
 def _dict_rpartition(in_dict, keys, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False):
     """
@@ -161,23 +143,16 @@ def _dict_rpartition(in_dict, keys, delimiter=DEFAULT_TARGET_DELIM, ordered_dict
     :return: (The dict at the one-to-last key, the last key)
     """
     if delimiter in keys:
-        all_but_last_keys, _, last_key = keys.rpartition(delimiter)
-        ensure_dict_key(
-            in_dict, all_but_last_keys, delimiter=delimiter, ordered_dict=ordered_dict
-        )
-        dict_pointer = salt.utils.data.traverse_dict(
-            in_dict, all_but_last_keys, default=None, delimiter=delimiter
-        )
+        (all_but_last_keys, _, last_key) = keys.rpartition(delimiter)
+        ensure_dict_key(in_dict, all_but_last_keys, delimiter=delimiter, ordered_dict=ordered_dict)
+        dict_pointer = salt.utils.data.traverse_dict(in_dict, all_but_last_keys, default=None, delimiter=delimiter)
     else:
         dict_pointer = in_dict
         last_key = keys
-    return dict_pointer, last_key
+    return (dict_pointer, last_key)
 
-
-@jinja_filter("set_dict_key_value")
-def set_dict_key_value(
-    in_dict, keys, value, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False
-):
+@jinja_filter('set_dict_key_value')
+def set_dict_key_value(in_dict, keys, value, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False):
     """
     Ensures that in_dict contains the series of recursive keys defined in keys.
     Also sets whatever is at the end of `in_dict` traversed with `keys` to `value`.
@@ -191,122 +166,57 @@ def set_dict_key_value(
     :rtype: dict
     :return: Returns the modified in-place `in_dict`.
     """
-    dict_pointer, last_key = _dict_rpartition(
-        in_dict, keys, delimiter=delimiter, ordered_dict=ordered_dict
-    )
+    (dict_pointer, last_key) = _dict_rpartition(in_dict, keys, delimiter=delimiter, ordered_dict=ordered_dict)
     dict_pointer[last_key] = value
     return in_dict
 
-
-@jinja_filter("update_dict_key_value")
-def update_dict_key_value(
-    in_dict, keys, value, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False
-):
-    """
-    Ensures that in_dict contains the series of recursive keys defined in keys.
-    Also updates the dict, that is at the end of `in_dict` traversed with `keys`,
-    with `value`.
-
-    :param dict in_dict: The dictionary to work with
-    :param str keys: The delimited string with one or more keys.
-    :param any value: The value to update the nested dict-key with.
-    :param str delimiter: The delimiter to use in `keys`. Defaults to ':'.
-    :param bool ordered_dict: Create OrderedDicts if keys are missing.
-                              Default: create regular dicts.
-    :rtype: dict
-    :return: Returns the modified in-place `in_dict`.
-    """
-    dict_pointer, last_key = _dict_rpartition(
-        in_dict, keys, delimiter=delimiter, ordered_dict=ordered_dict
-    )
+@jinja_filter('update_dict_key_value')
+def update_dict_key_value(in_dict, keys, value, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False):
+    log.info('Trace')
+    "\n    Ensures that in_dict contains the series of recursive keys defined in keys.\n    Also updates the dict, that is at the end of `in_dict` traversed with `keys`,\n    with `value`.\n\n    :param dict in_dict: The dictionary to work with\n    :param str keys: The delimited string with one or more keys.\n    :param any value: The value to update the nested dict-key with.\n    :param str delimiter: The delimiter to use in `keys`. Defaults to ':'.\n    :param bool ordered_dict: Create OrderedDicts if keys are missing.\n                              Default: create regular dicts.\n    :rtype: dict\n    :return: Returns the modified in-place `in_dict`.\n    "
+    (dict_pointer, last_key) = _dict_rpartition(in_dict, keys, delimiter=delimiter, ordered_dict=ordered_dict)
     if last_key not in dict_pointer or dict_pointer[last_key] is None:
         dict_pointer[last_key] = OrderedDict() if ordered_dict else {}
     try:
+        log.info('Trace')
         dict_pointer[last_key].update(value)
     except AttributeError:
-        raise SaltInvocationError(
-            "The last key contains a {}, which cannot update.".format(
-                type(dict_pointer[last_key])
-            )
-        )
+        log.info('Trace')
+        raise SaltInvocationError('The last key contains a {}, which cannot update.'.format(type(dict_pointer[last_key])))
     except (ValueError, TypeError):
-        raise SaltInvocationError(
-            "Cannot update {} with a {}.".format(
-                type(dict_pointer[last_key]), type(value)
-            )
-        )
+        log.info('Trace')
+        raise SaltInvocationError('Cannot update {} with a {}.'.format(type(dict_pointer[last_key]), type(value)))
     return in_dict
 
-
-@jinja_filter("append_dict_key_value")
-def append_dict_key_value(
-    in_dict, keys, value, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False
-):
-    """
-    Ensures that in_dict contains the series of recursive keys defined in keys.
-    Also appends `value` to the list that is at the end of `in_dict` traversed
-    with `keys`.
-
-    :param dict in_dict: The dictionary to work with
-    :param str keys: The delimited string with one or more keys.
-    :param any value: The value to append to the nested dict-key.
-    :param str delimiter: The delimiter to use in `keys`. Defaults to ':'.
-    :param bool ordered_dict: Create OrderedDicts if keys are missing.
-                              Default: create regular dicts.
-    :rtype: dict
-    :return: Returns the modified in-place `in_dict`.
-    """
-    dict_pointer, last_key = _dict_rpartition(
-        in_dict, keys, delimiter=delimiter, ordered_dict=ordered_dict
-    )
+@jinja_filter('append_dict_key_value')
+def append_dict_key_value(in_dict, keys, value, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False):
+    log.info('Trace')
+    "\n    Ensures that in_dict contains the series of recursive keys defined in keys.\n    Also appends `value` to the list that is at the end of `in_dict` traversed\n    with `keys`.\n\n    :param dict in_dict: The dictionary to work with\n    :param str keys: The delimited string with one or more keys.\n    :param any value: The value to append to the nested dict-key.\n    :param str delimiter: The delimiter to use in `keys`. Defaults to ':'.\n    :param bool ordered_dict: Create OrderedDicts if keys are missing.\n                              Default: create regular dicts.\n    :rtype: dict\n    :return: Returns the modified in-place `in_dict`.\n    "
+    (dict_pointer, last_key) = _dict_rpartition(in_dict, keys, delimiter=delimiter, ordered_dict=ordered_dict)
     if last_key not in dict_pointer or dict_pointer[last_key] is None:
         dict_pointer[last_key] = []
     try:
+        log.info('Trace')
         dict_pointer[last_key].append(value)
     except AttributeError:
-        raise SaltInvocationError(
-            "The last key contains a {}, which cannot append.".format(
-                type(dict_pointer[last_key])
-            )
-        )
+        log.info('Trace')
+        raise SaltInvocationError('The last key contains a {}, which cannot append.'.format(type(dict_pointer[last_key])))
     return in_dict
 
-
-@jinja_filter("extend_dict_key_value")
-def extend_dict_key_value(
-    in_dict, keys, value, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False
-):
-    """
-    Ensures that in_dict contains the series of recursive keys defined in keys.
-    Also extends the list, that is at the end of `in_dict` traversed with `keys`,
-    with `value`.
-
-    :param dict in_dict: The dictionary to work with
-    :param str keys: The delimited string with one or more keys.
-    :param any value: The value to extend the nested dict-key with.
-    :param str delimiter: The delimiter to use in `keys`. Defaults to ':'.
-    :param bool ordered_dict: Create OrderedDicts if keys are missing.
-                              Default: create regular dicts.
-    :rtype: dict
-    :return: Returns the modified in-place `in_dict`.
-    """
-    dict_pointer, last_key = _dict_rpartition(
-        in_dict, keys, delimiter=delimiter, ordered_dict=ordered_dict
-    )
+@jinja_filter('extend_dict_key_value')
+def extend_dict_key_value(in_dict, keys, value, delimiter=DEFAULT_TARGET_DELIM, ordered_dict=False):
+    log.info('Trace')
+    "\n    Ensures that in_dict contains the series of recursive keys defined in keys.\n    Also extends the list, that is at the end of `in_dict` traversed with `keys`,\n    with `value`.\n\n    :param dict in_dict: The dictionary to work with\n    :param str keys: The delimited string with one or more keys.\n    :param any value: The value to extend the nested dict-key with.\n    :param str delimiter: The delimiter to use in `keys`. Defaults to ':'.\n    :param bool ordered_dict: Create OrderedDicts if keys are missing.\n                              Default: create regular dicts.\n    :rtype: dict\n    :return: Returns the modified in-place `in_dict`.\n    "
+    (dict_pointer, last_key) = _dict_rpartition(in_dict, keys, delimiter=delimiter, ordered_dict=ordered_dict)
     if last_key not in dict_pointer or dict_pointer[last_key] is None:
         dict_pointer[last_key] = []
     try:
+        log.info('Trace')
         dict_pointer[last_key].extend(value)
     except AttributeError:
-        raise SaltInvocationError(
-            "The last key contains a {}, which cannot extend.".format(
-                type(dict_pointer[last_key])
-            )
-        )
+        log.info('Trace')
+        raise SaltInvocationError('The last key contains a {}, which cannot extend.'.format(type(dict_pointer[last_key])))
     except TypeError:
-        raise SaltInvocationError(
-            "Cannot extend {} with a {}.".format(
-                type(dict_pointer[last_key]), type(value)
-            )
-        )
+        log.info('Trace')
+        raise SaltInvocationError('Cannot extend {} with a {}.'.format(type(dict_pointer[last_key]), type(value)))
     return in_dict

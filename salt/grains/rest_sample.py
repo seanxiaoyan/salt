@@ -1,30 +1,24 @@
 """
 Generate baseline proxy minion grains
 """
-
 import salt.utils.platform
-
-__proxyenabled__ = ["rest_sample"]
-
-__virtualname__ = "rest_sample"
-
+import logging
+log = logging.getLogger(__name__)
+__proxyenabled__ = ['rest_sample']
+__virtualname__ = 'rest_sample'
 
 def __virtual__():
     try:
-        if (
-            salt.utils.platform.is_proxy()
-            and __opts__["proxy"]["proxytype"] == "rest_sample"
-        ):
+        log.info('Trace')
+        if salt.utils.platform.is_proxy() and __opts__['proxy']['proxytype'] == 'rest_sample':
             return __virtualname__
     except KeyError:
+        log.info('Trace')
         pass
-
     return False
 
-
 def kernel():
-    return {"kernel": "proxy"}
-
+    return {'kernel': 'proxy'}
 
 def proxy_functions(proxy):
     """
@@ -34,20 +28,16 @@ def proxy_functions(proxy):
     so `proxy` might be None.
     """
     if proxy:
-        return {"proxy_functions": proxy["rest_sample.fns"]()}
-
+        return {'proxy_functions': proxy['rest_sample.fns']()}
 
 def os():
-    return {"os": "RestExampleOS"}
-
+    return {'os': 'RestExampleOS'}
 
 def location():
-    return {"location": "In this darn virtual machine.  Let me out!"}
-
+    return {'location': 'In this darn virtual machine.  Let me out!'}
 
 def os_family():
-    return {"os_family": "proxy"}
-
+    return {'os_family': 'proxy'}
 
 def os_data():
-    return {"os_data": "funkyHttp release 1.0.a.4.g"}
+    return {'os_data': 'funkyHttp release 1.0.a.4.g'}

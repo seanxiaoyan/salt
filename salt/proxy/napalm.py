@@ -156,52 +156,22 @@ Example using a user-specific library, extending NAPALM's capabilities, e.g. ``c
     following to connect using a different username instead:
     ``salt '*' net.arp username=my-alt-usr force_reconnect=True``.
 """
-
 import logging
-
 import salt.utils.napalm
-
+import logging
+log = logging.getLogger(__name__)
 log = logging.getLogger(__file__)
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# proxy properties
-# ----------------------------------------------------------------------------------------------------------------------
-
-__proxyenabled__ = ["napalm"]
-# proxy name
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# property functions
-# ----------------------------------------------------------------------------------------------------------------------
-
+__proxyenabled__ = ['napalm']
 
 def __virtual__():
-    return salt.utils.napalm.virtual(__opts__, "napalm", __file__)
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# helper functions -- will not be exported
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
-# Proxy functions
-# ----------------------------------------------------------------------------------------------------------------------
-
+    return salt.utils.napalm.virtual(__opts__, 'napalm', __file__)
 
 def init(opts):
     """
     Opens the connection with the network device.
     """
-    __context__["napalm_device"] = {
-        "opts": opts,
-        "id": opts["id"],
-        "network_device": salt.utils.napalm.get_device(opts),
-        "details": {"initialized": True},
-    }
+    __context__['napalm_device'] = {'opts': opts, 'id': opts['id'], 'network_device': salt.utils.napalm.get_device(opts), 'details': {'initialized': True}}
     return True
-
 
 def alive(opts):
     """
@@ -210,99 +180,64 @@ def alive(opts):
     .. versionadded:: 2017.7.0
     """
     if salt.utils.napalm.not_always_alive(opts):
-        return True  # don't force reconnection for not-always alive proxies
-        # or regular minion
-    is_alive_ret = call("is_alive", **{})
-    if not is_alive_ret.get("result", False):
-        log.debug(
-            "[%s] Unable to execute `is_alive`: %s",
-            opts.get("id"),
-            is_alive_ret.get("comment"),
-        )
-        # if `is_alive` is not implemented by the underneath driver,
-        # will consider the connection to be still alive
-        # we don't want overly request connection reestablishment
-        # NOTE: revisit this if IOS is still not stable
-        #       and return False to force reconnection
         return True
-    flag = is_alive_ret.get("out", {}).get("is_alive", False)
-    log.debug("Is %s still alive? %s", opts.get("id"), "Yes." if flag else "No.")
+    is_alive_ret = call('is_alive', **{})
+    if not is_alive_ret.get('result', False):
+        log.debug('[%s] Unable to execute `is_alive`: %s', opts.get('id'), is_alive_ret.get('comment'))
+        return True
+    flag = is_alive_ret.get('out', {}).get('is_alive', False)
+    log.debug('Is %s still alive? %s', opts.get('id'), 'Yes.' if flag else 'No.')
     return flag
-
 
 def ping():
     """
     Connection open successfully?
     """
-    return __context__["napalm_device"]["network_device"].get("UP", False)
-
+    return __context__['napalm_device']['network_device'].get('UP', False)
 
 def initialized():
     """
     Connection finished initializing?
     """
-    return __context__["napalm_device"]["details"].get("initialized", False)
-
+    return __context__['napalm_device']['details'].get('initialized', False)
 
 def get_device():
     """
     Returns the network device object.
     """
-    return __context__["napalm_device"]["network_device"]
-
+    return __context__['napalm_device']['network_device']
 
 def get_grains():
     """
     Retrieve facts from the network device.
     """
-    return call("get_facts", **{})
-
+    return call('get_facts', **{})
 
 def grains_refresh():
     """
     Refresh the grains.
     """
-    __context__["napalm_device"]["details"]["grains_cache"] = {}
+    __context__['napalm_device']['details']['grains_cache'] = {}
     return get_grains()
-
 
 def fns():
     """
     Method called by NAPALM grains module.
     """
-    return {"details": "Network device grains."}
-
+    return {'details': 'Network device grains.'}
 
 def shutdown(opts):
-    """
-    Closes connection with the device.
-    """
+    log.info('Trace')
+    '\n    Closes connection with the device.\n    '
     try:
-        if not __context__["napalm_device"]["network_device"].get("UP", False):
-            raise Exception("not connected!")
-        __context__["napalm_device"]["network_device"].get("DRIVER").close()
-    except Exception as error:  # pylint: disable=broad-except
-        port = (
-            __context__["napalm_device"]["network_device"]
-            .get("OPTIONAL_ARGS", {})
-            .get("port"),
-        )
-        log.error(
-            "Cannot close connection with %s%s! Please check error: %s",
-            __context__["napalm_device"]["network_device"].get(
-                "HOSTNAME", "[unknown hostname]"
-            ),
-            ":{}".format(port) if port else "",
-            error,
-        )
-
+        log.info('Trace')
+        if not __context__['napalm_device']['network_device'].get('UP', False):
+            raise Exception('not connected!')
+        __context__['napalm_device']['network_device'].get('DRIVER').close()
+    except Exception as error:
+        port = (__context__['napalm_device']['network_device'].get('OPTIONAL_ARGS', {}).get('port'),)
+        log.error('Cannot close connection with %s%s! Please check error: %s', __context__['napalm_device']['network_device'].get('HOSTNAME', '[unknown hostname]'), ':{}'.format(port) if port else '', error)
     return True
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# Callable functions
-# ----------------------------------------------------------------------------------------------------------------------
-
 
 def call(method, *args, **kwargs):
     """
@@ -339,11 +274,7 @@ def call(method, *args, **kwargs):
     """
     kwargs_copy = {}
     kwargs_copy.update(kwargs)
-    for karg, warg in kwargs_copy.items():
-        # will remove None values
-        # thus the NAPALM methods will be called with their defaults
+    for (karg, warg) in kwargs_copy.items():
         if warg is None:
             kwargs.pop(karg)
-    return salt.utils.napalm.call(
-        __context__["napalm_device"]["network_device"], method, *args, **kwargs
-    )
+    return salt.utils.napalm.call(__context__['napalm_device']['network_device'], method, *args, **kwargs)

@@ -1,25 +1,22 @@
 """
 Helper functions for transport components to handle message framing
 """
-
-
 import salt.utils.msgpack
+import logging
+log = logging.getLogger(__name__)
 
-
-def frame_msg(body, header=None, raw_body=False):  # pylint: disable=unused-argument
+def frame_msg(body, header=None, raw_body=False):
     """
     Frame the given message with our wire protocol
     """
     framed_msg = {}
     if header is None:
         header = {}
-
-    framed_msg["head"] = header
-    framed_msg["body"] = body
+    framed_msg['head'] = header
+    framed_msg['body'] = body
     return salt.utils.msgpack.dumps(framed_msg)
 
-
-def frame_msg_ipc(body, header=None, raw_body=False):  # pylint: disable=unused-argument
+def frame_msg_ipc(body, header=None, raw_body=False):
     """
     Frame the given message with our wire protocol for IPC
 
@@ -29,17 +26,13 @@ def frame_msg_ipc(body, header=None, raw_body=False):  # pylint: disable=unused-
     framed_msg = {}
     if header is None:
         header = {}
-
-    framed_msg["head"] = header
-    framed_msg["body"] = body
+    framed_msg['head'] = header
+    framed_msg['body'] = body
     return salt.utils.msgpack.dumps(framed_msg, use_bin_type=True)
 
-
 def _decode_embedded_list(src):
-    """
-    Convert enbedded bytes to strings if possible.
-    List helper.
-    """
+    log.info('Trace')
+    '\n    Convert enbedded bytes to strings if possible.\n    List helper.\n    '
     output = []
     for elem in src:
         if isinstance(elem, dict):
@@ -48,37 +41,39 @@ def _decode_embedded_list(src):
             elem = _decode_embedded_list(elem)
         elif isinstance(elem, bytes):
             try:
+                log.info('Trace')
                 elem = elem.decode()
             except UnicodeError:
+                log.info('Trace')
                 pass
         output.append(elem)
     return output
 
-
 def _decode_embedded_dict(src):
-    """
-    Convert enbedded bytes to strings if possible.
-    Dict helper.
-    """
+    log.info('Trace')
+    '\n    Convert enbedded bytes to strings if possible.\n    Dict helper.\n    '
     output = {}
-    for key, val in src.items():
+    for (key, val) in src.items():
         if isinstance(val, dict):
             val = _decode_embedded_dict(val)
         elif isinstance(val, list):
             val = _decode_embedded_list(val)
         elif isinstance(val, bytes):
             try:
+                log.info('Trace')
                 val = val.decode()
             except UnicodeError:
+                log.info('Trace')
                 pass
         if isinstance(key, bytes):
             try:
+                log.info('Trace')
                 key = key.decode()
             except UnicodeError:
+                log.info('Trace')
                 pass
         output[key] = val
     return output
-
 
 def decode_embedded_strs(src):
     """
@@ -97,8 +92,10 @@ def decode_embedded_strs(src):
         return _decode_embedded_list(src)
     elif isinstance(src, bytes):
         try:
+            log.info('Trace')
             return src.decode()
         except UnicodeError:
+            log.info('Trace')
             return src
     else:
         return src

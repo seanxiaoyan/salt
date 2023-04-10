@@ -9,32 +9,27 @@ States to manage git repositories and git configuration
     This state module now requires git 1.6.5 (released 10 October 2009) or
     newer.
 """
-
 import errno
 import logging
 import os
 import re
 import string
-
 import salt.utils.args
 import salt.utils.files
 import salt.utils.url
 import salt.utils.versions
 from salt.exceptions import CommandExecutionError
 from salt.utils.versions import LooseVersion as _LooseVersion
-
 log = logging.getLogger(__name__)
-
 
 def __virtual__():
     """
     Only load if git is available
     """
-    if "git.version" not in __salt__:
-        return (False, "git module could not be loaded")
-    git_ver = _LooseVersion(__salt__["git.version"](versioninfo=False))
-    return git_ver >= _LooseVersion("1.6.5")
-
+    if 'git.version' not in __salt__:
+        return (False, 'git module could not be loaded')
+    git_ver = _LooseVersion(__salt__['git.version'](versioninfo=False))
+    return git_ver >= _LooseVersion('1.6.5')
 
 def _revs_equal(rev1, rev2, rev_type):
     """
@@ -44,29 +39,26 @@ def _revs_equal(rev1, rev2, rev_type):
 
     NOTE: This means that rev2 must be the short rev.
     """
-    if (rev1 is None and rev2 is not None) or (rev2 is None and rev1 is not None):
+    if rev1 is None and rev2 is not None or (rev2 is None and rev1 is not None):
         return False
     elif rev1 is rev2 is None:
         return True
-    elif rev_type == "sha1":
+    elif rev_type == 'sha1':
         return rev1.startswith(rev2)
     else:
         return rev1 == rev2
 
-
 def _short_sha(sha1):
     return sha1[:7] if sha1 is not None else None
-
 
 def _format_comments(comments):
     """
     Return a joined list
     """
-    ret = ". ".join(comments)
+    ret = '. '.join(comments)
     if len(comments) > 1:
-        ret += "."
+        ret += '.'
     return ret
-
 
 def _need_branch_change(branch, local_branch):
     """
@@ -74,210 +66,99 @@ def _need_branch_change(branch, local_branch):
     """
     return branch is not None and branch != local_branch
 
-
-def _get_branch_opts(
-    branch, local_branch, all_local_branches, desired_upstream, git_ver=None
-):
+def _get_branch_opts(branch, local_branch, all_local_branches, desired_upstream, git_ver=None):
     """
     DRY helper to build list of opts for git.branch, for the purposes of
     setting upstream tracking branch
     """
     if branch is not None and branch not in all_local_branches:
-        # We won't be setting upstream because the act of checking out a new
-        # branch will set upstream for us
         return None
-
     if git_ver is None:
-        git_ver = _LooseVersion(__salt__["git.version"](versioninfo=False))
-
+        git_ver = _LooseVersion(__salt__['git.version'](versioninfo=False))
     ret = []
-    if git_ver >= _LooseVersion("1.8.0"):
-        ret.extend(["--set-upstream-to", desired_upstream])
+    if git_ver >= _LooseVersion('1.8.0'):
+        ret.extend(['--set-upstream-to', desired_upstream])
     else:
-        ret.append("--set-upstream")
-        # --set-upstream does not assume the current branch, so we have to
-        # tell it which branch we'll be using
+        ret.append('--set-upstream')
         ret.append(local_branch if branch is None else branch)
         ret.append(desired_upstream)
     return ret
-
 
 def _get_local_rev_and_branch(target, user, password, output_encoding=None):
     """
     Return the local revision for before/after comparisons
     """
-    log.info("Checking local revision for %s", target)
+    log.info('Checking local revision for %s', target)
     try:
-        local_rev = __salt__["git.revision"](
-            target,
-            user=user,
-            password=password,
-            ignore_retcode=True,
-            output_encoding=output_encoding,
-        )
+        local_rev = __salt__['git.revision'](target, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
     except CommandExecutionError:
-        log.info("No local revision for %s", target)
+        log.info('No local revision for %s', target)
         local_rev = None
-
-    log.info("Checking local branch for %s", target)
+    log.info('Checking local branch for %s', target)
     try:
-        local_branch = __salt__["git.current_branch"](
-            target,
-            user=user,
-            password=password,
-            ignore_retcode=True,
-            output_encoding=output_encoding,
-        )
+        local_branch = __salt__['git.current_branch'](target, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
     except CommandExecutionError:
-        log.info("No local branch for %s", target)
+        log.info('No local branch for %s', target)
         local_branch = None
-
-    return local_rev, local_branch
-
+    return (local_rev, local_branch)
 
 def _strip_exc(exc):
     """
     Strip the actual command that was run from exc.strerror to leave just the
     error message
     """
-    return re.sub(r'^Command [\'"].+[\'"] failed: ', "", exc.strerror)
-
+    return re.sub('^Command [\\\'"].+[\\\'"] failed: ', '', exc.strerror)
 
 def _uptodate(ret, target, comments=None, local_changes=False):
-    ret["comment"] = "Repository {} is up-to-date".format(target)
+    ret['comment'] = 'Repository {} is up-to-date'.format(target)
     if local_changes:
-        ret["comment"] += (
-            ", but with uncommitted changes. Set 'force_reset' to True to "
-            "purge uncommitted changes."
-        )
+        ret['comment'] += ", but with uncommitted changes. Set 'force_reset' to True to purge uncommitted changes."
     if comments:
-        # Shouldn't be making any changes if the repo was up to date, but
-        # report on them so we are alerted to potential problems with our
-        # logic.
-        ret["comment"] += "\n\nChanges {}made: {}".format(
-            "that would be " if __opts__["test"] else "", _format_comments(comments)
-        )
+        ret['comment'] += '\n\nChanges {}made: {}'.format('that would be ' if __opts__['test'] else '', _format_comments(comments))
     return ret
-
 
 def _neutral_test(ret, comment):
-    ret["result"] = None
-    ret["comment"] = comment
+    log.info('Trace')
+    ret['result'] = None
+    ret['comment'] = comment
     return ret
-
 
 def _fail(ret, msg, comments=None):
-    ret["result"] = False
+    log.info('Trace')
+    ret['result'] = False
     if comments:
-        msg += "\n\nChanges already made: " + _format_comments(comments)
-    ret["comment"] = msg
+        msg += '\n\nChanges already made: ' + _format_comments(comments)
+    ret['comment'] = msg
     return ret
-
 
 def _already_cloned(ret, target, branch=None, comments=None):
-    ret["result"] = True
-    ret["comment"] = "Repository already exists at {}{}".format(
-        target, " and is checked out to branch '{}'".format(branch) if branch else ""
-    )
+    ret['result'] = True
+    ret['comment'] = 'Repository already exists at {}{}'.format(target, " and is checked out to branch '{}'".format(branch) if branch else '')
     if comments:
-        ret["comment"] += "\n\nChanges {}made: {}".format(
-            "that would be " if __opts__["test"] else "", _format_comments(comments)
-        )
+        ret['comment'] += '\n\nChanges {}made: {}'.format('that would be ' if __opts__['test'] else '', _format_comments(comments))
     return ret
 
-
 def _failed_fetch(ret, exc, comments=None):
-    msg = (
-        "Fetch failed. Set 'force_fetch' to True to force the fetch if the "
-        "failure was due to not being able to fast-forward. Output of the fetch "
-        "command follows:\n\n{}".format(_strip_exc(exc))
-    )
+    msg = "Fetch failed. Set 'force_fetch' to True to force the fetch if the failure was due to not being able to fast-forward. Output of the fetch command follows:\n\n{}".format(_strip_exc(exc))
     return _fail(ret, msg, comments)
-
 
 def _failed_submodule_update(ret, exc, comments=None):
-    msg = "Failed to update submodules: " + _strip_exc(exc)
+    msg = 'Failed to update submodules: ' + _strip_exc(exc)
     return _fail(ret, msg, comments)
 
-
-def _not_fast_forward(
-    ret, rev, pre, post, branch, local_branch, default_branch, local_changes, comments
-):
-    branch_msg = ""
+def _not_fast_forward(ret, rev, pre, post, branch, local_branch, default_branch, local_changes, comments):
+    branch_msg = ''
     if branch is None:
-        if rev != "HEAD":
+        if rev != 'HEAD':
             if local_branch != rev:
-                branch_msg = (
-                    " The desired rev ({0}) differs from the name of the "
-                    "local branch ({1}), if the desired rev is a branch name "
-                    "then a forced update could possibly be avoided by "
-                    "setting the 'branch' argument to '{0}' instead.".format(
-                        rev, local_branch
-                    )
-                )
-        else:
-            if default_branch is not None and local_branch != default_branch:
-                branch_msg = (
-                    " The default remote branch ({0}) differs from the "
-                    "local branch ({1}). This could be caused by changing the "
-                    "default remote branch, or if the local branch was "
-                    "manually changed. Rather than forcing an update, it "
-                    "may be advisable to set the 'branch' argument to "
-                    "'{0}' instead. To ensure that this state follows the "
-                    "'{0}' branch instead of the remote HEAD, set the "
-                    "'rev' argument to '{0}'.".format(default_branch, local_branch)
-                )
-
+                branch_msg = " The desired rev ({0}) differs from the name of the local branch ({1}), if the desired rev is a branch name then a forced update could possibly be avoided by setting the 'branch' argument to '{0}' instead.".format(rev, local_branch)
+        elif default_branch is not None and local_branch != default_branch:
+            branch_msg = " The default remote branch ({0}) differs from the local branch ({1}). This could be caused by changing the default remote branch, or if the local branch was manually changed. Rather than forcing an update, it may be advisable to set the 'branch' argument to '{0}' instead. To ensure that this state follows the '{0}' branch instead of the remote HEAD, set the 'rev' argument to '{0}'.".format(default_branch, local_branch)
     pre = _short_sha(pre)
     post = _short_sha(post)
-    return _fail(
-        ret,
-        "Repository would be updated {}{}, but {}. Set 'force_reset' to "
-        "True{} to force this update{}.{}".format(
-            "from {} to {}".format(pre, post)
-            if local_changes and pre != post
-            else "to {}".format(post),
-            " (after checking out local branch '{}')".format(branch)
-            if _need_branch_change(branch, local_branch)
-            else "",
-            "this is not a fast-forward merge"
-            if not local_changes
-            else "there are uncommitted changes",
-            " (or 'remote-changes')" if local_changes else "",
-            " and discard these changes" if local_changes else "",
-            branch_msg,
-        ),
-        comments,
-    )
+    return _fail(ret, "Repository would be updated {}{}, but {}. Set 'force_reset' to True{} to force this update{}.{}".format('from {} to {}'.format(pre, post) if local_changes and pre != post else 'to {}'.format(post), " (after checking out local branch '{}')".format(branch) if _need_branch_change(branch, local_branch) else '', 'this is not a fast-forward merge' if not local_changes else 'there are uncommitted changes', " (or 'remote-changes')" if local_changes else '', ' and discard these changes' if local_changes else '', branch_msg), comments)
 
-
-def latest(
-    name,
-    target,
-    rev="HEAD",
-    branch=None,
-    user=None,
-    password=None,
-    update_head=True,
-    force_checkout=False,
-    force_clone=False,
-    force_fetch=False,
-    force_reset=False,
-    submodules=False,
-    bare=False,
-    mirror=False,
-    remote="origin",
-    fetch_tags=True,
-    sync_tags=True,
-    depth=None,
-    identity=None,
-    https_user=None,
-    https_pass=None,
-    refspec_branch="*",
-    refspec_tag="*",
-    output_encoding=None,
-    **kwargs
-):
+def latest(name, target, rev='HEAD', branch=None, user=None, password=None, update_head=True, force_checkout=False, force_clone=False, force_fetch=False, force_reset=False, submodules=False, bare=False, mirror=False, remote='origin', fetch_tags=True, sync_tags=True, depth=None, identity=None, https_user=None, https_pass=None, refspec_branch='*', refspec_tag='*', output_encoding=None, **kwargs):
     """
     Make sure the repository is cloned to the given directory and is
     up-to-date.
@@ -608,29 +489,18 @@ def latest(
                   - pkg: git
                   - ssh_known_hosts: gitlab.example.com
     """
-    ret = {"name": name, "result": True, "comment": "", "changes": {}}
-
+    ret = {'name': name, 'result': True, 'comment': '', 'changes': {}}
     kwargs = salt.utils.args.clean_kwargs(**kwargs)
     if kwargs:
         return _fail(ret, salt.utils.args.invalid_kwargs(kwargs, raise_exc=False))
-
     if not remote:
         return _fail(ret, "'remote' argument is required")
-
     if not target:
         return _fail(ret, "'target' argument is required")
-
     if not rev:
-        return _fail(
-            ret, "'{}' is not a valid value for the 'rev' argument".format(rev)
-        )
-
-    if force_reset not in (True, False, "remote-changes"):
-        return _fail(
-            ret, "'force_reset' must be one of True, False, or 'remote-changes'"
-        )
-
-    # Ensure that certain arguments are strings to ensure that comparisons work
+        return _fail(ret, "'{}' is not a valid value for the 'rev' argument".format(rev))
+    if force_reset not in (True, False, 'remote-changes'):
+        return _fail(ret, "'force_reset' must be one of True, False, or 'remote-changes'")
     if not isinstance(rev, str):
         rev = str(rev)
     if target is not None:
@@ -638,1085 +508,419 @@ def latest(
             target = str(target)
         if not os.path.isabs(target):
             return _fail(ret, "target '{}' is not an absolute path".format(target))
-    if branch is not None and not isinstance(branch, str):
+    if branch is not None and (not isinstance(branch, str)):
         branch = str(branch)
-    if user is not None and not isinstance(user, str):
+    if user is not None and (not isinstance(user, str)):
         user = str(user)
-    if password is not None and not isinstance(password, str):
+    if password is not None and (not isinstance(password, str)):
         password = str(password)
-    if remote is not None and not isinstance(remote, str):
+    if remote is not None and (not isinstance(remote, str)):
         remote = str(remote)
     if identity is not None:
         if isinstance(identity, str):
             identity = [identity]
         elif not isinstance(identity, list):
-            return _fail(ret, "identity must be either a list or a string")
+            return _fail(ret, 'identity must be either a list or a string')
         identity = [os.path.expanduser(x) for x in identity]
         for ident_path in identity:
-            if "salt://" in ident_path:
+            if 'salt://' in ident_path:
                 try:
-                    ident_path = __salt__["cp.cache_file"](ident_path, __env__)
+                    ident_path = __salt__['cp.cache_file'](ident_path, __env__)
                 except OSError as exc:
-                    log.exception("Failed to cache %s", ident_path)
-                    return _fail(
-                        ret, "identity '{}' does not exist.".format(ident_path)
-                    )
+                    log.exception('Failed to cache %s', ident_path)
+                    return _fail(ret, "identity '{}' does not exist.".format(ident_path))
             if not os.path.isabs(ident_path):
-                return _fail(
-                    ret, "identity '{}' is not an absolute path".format(ident_path)
-                )
-    if https_user is not None and not isinstance(https_user, str):
+                return _fail(ret, "identity '{}' is not an absolute path".format(ident_path))
+    if https_user is not None and (not isinstance(https_user, str)):
         https_user = str(https_user)
-    if https_pass is not None and not isinstance(https_pass, str):
+    if https_pass is not None and (not isinstance(https_pass, str)):
         https_pass = str(https_pass)
-
-    # Check for lfs filter settings, and setup lfs_opts accordingly. These opts
-    # will be passed where appropriate to ensure that these commands are
-    # authenticated and that the git LFS plugin can download files.
-    use_lfs = bool(
-        __salt__["git.config_get_regexp"](
-            r"filter\.lfs\.", **{"global": True, "ignore_retcode": True}
-        )
-    )
-    lfs_opts = {"identity": identity} if use_lfs else {}
-
+    use_lfs = bool(__salt__['git.config_get_regexp']('filter\\.lfs\\.', **{'global': True, 'ignore_retcode': True}))
+    lfs_opts = {'identity': identity} if use_lfs else {}
     if os.path.isfile(target):
-        return _fail(
-            ret,
-            "Target '{}' exists and is a regular file, cannot proceed".format(target),
-        )
-
+        return _fail(ret, "Target '{}' exists and is a regular file, cannot proceed".format(target))
     try:
-        desired_fetch_url = salt.utils.url.add_http_basic_auth(
-            name, https_user, https_pass, https_only=True
-        )
+        desired_fetch_url = salt.utils.url.add_http_basic_auth(name, https_user, https_pass, https_only=True)
     except ValueError as exc:
         return _fail(ret, exc.__str__())
-
     redacted_fetch_url = salt.utils.url.redact_http_basic_auth(desired_fetch_url)
-
     if mirror:
         bare = True
-
-    # Check to make sure rev and mirror/bare are not both in use
-    if rev != "HEAD" and bare:
-        return _fail(
-            ret, "'rev' is not compatible with the 'mirror' and 'bare' arguments"
-        )
-
-    run_check_cmd_kwargs = {"runas": user, "password": password}
-    if "shell" in __grains__:
-        run_check_cmd_kwargs["shell"] = __grains__["shell"]
-
-    refspecs = (
-        [
-            "refs/heads/{0}:refs/remotes/{1}/{0}".format(refspec_branch, remote),
-            "+refs/tags/{0}:refs/tags/{0}".format(refspec_tag),
-        ]
-        if fetch_tags
-        else []
-    )
-
-    log.info("Checking remote revision for %s", name)
+    if rev != 'HEAD' and bare:
+        return _fail(ret, "'rev' is not compatible with the 'mirror' and 'bare' arguments")
+    run_check_cmd_kwargs = {'runas': user, 'password': password}
+    if 'shell' in __grains__:
+        run_check_cmd_kwargs['shell'] = __grains__['shell']
+    refspecs = ['refs/heads/{0}:refs/remotes/{1}/{0}'.format(refspec_branch, remote), '+refs/tags/{0}:refs/tags/{0}'.format(refspec_tag)] if fetch_tags else []
+    log.info('Checking remote revision for %s', name)
     try:
-        all_remote_refs = __salt__["git.remote_refs"](
-            name,
-            heads=False,
-            tags=False,
-            user=user,
-            password=password,
-            identity=identity,
-            https_user=https_user,
-            https_pass=https_pass,
-            ignore_retcode=False,
-            saltenv=__env__,
-            output_encoding=output_encoding,
-        )
+        all_remote_refs = __salt__['git.remote_refs'](name, heads=False, tags=False, user=user, password=password, identity=identity, https_user=https_user, https_pass=https_pass, ignore_retcode=False, saltenv=__env__, output_encoding=output_encoding)
     except CommandExecutionError as exc:
-        return _fail(ret, "Failed to check remote refs: {}".format(_strip_exc(exc)))
-
-    if "HEAD" in all_remote_refs:
-        head_rev = all_remote_refs["HEAD"]
-        for refname, refsha in all_remote_refs.items():
-            if refname.startswith("refs/heads/"):
+        return _fail(ret, 'Failed to check remote refs: {}'.format(_strip_exc(exc)))
+    if 'HEAD' in all_remote_refs:
+        head_rev = all_remote_refs['HEAD']
+        for (refname, refsha) in all_remote_refs.items():
+            if refname.startswith('refs/heads/'):
                 if refsha == head_rev:
-                    default_branch = refname.partition("refs/heads/")[-1]
+                    default_branch = refname.partition('refs/heads/')[-1]
                     break
         else:
             default_branch = None
     else:
         head_rev = None
         default_branch = None
-
     desired_upstream = False
     if bare:
         remote_rev = None
         remote_rev_type = None
     else:
-        if rev == "HEAD":
+        if rev == 'HEAD':
             if head_rev is not None:
                 remote_rev = head_rev
-                # Just go with whatever the upstream currently is
                 desired_upstream = None
-                remote_rev_type = "sha1"
+                remote_rev_type = 'sha1'
             else:
-                # Empty remote repo
                 remote_rev = None
                 remote_rev_type = None
-        elif "refs/heads/" + rev in all_remote_refs:
-            remote_rev = all_remote_refs["refs/heads/" + rev]
-            desired_upstream = "/".join((remote, rev))
-            remote_rev_type = "branch"
-        elif "refs/tags/" + rev + "^{}" in all_remote_refs:
-            # Annotated tag
-            remote_rev = all_remote_refs["refs/tags/" + rev + "^{}"]
-            remote_rev_type = "tag"
-        elif "refs/tags/" + rev in all_remote_refs:
-            # Non-annotated tag
-            remote_rev = all_remote_refs["refs/tags/" + rev]
-            remote_rev_type = "tag"
+        elif 'refs/heads/' + rev in all_remote_refs:
+            remote_rev = all_remote_refs['refs/heads/' + rev]
+            desired_upstream = '/'.join((remote, rev))
+            remote_rev_type = 'branch'
+        elif 'refs/tags/' + rev + '^{}' in all_remote_refs:
+            remote_rev = all_remote_refs['refs/tags/' + rev + '^{}']
+            remote_rev_type = 'tag'
+        elif 'refs/tags/' + rev in all_remote_refs:
+            remote_rev = all_remote_refs['refs/tags/' + rev]
+            remote_rev_type = 'tag'
+        elif len(rev) <= 40 and all((x in string.hexdigits for x in rev)):
+            rev = rev.lower()
+            remote_rev = rev
+            remote_rev_type = 'sha1'
         else:
-            if len(rev) <= 40 and all(x in string.hexdigits for x in rev):
-                # git ls-remote did not find the rev, and because it's a
-                # hex string <= 40 chars we're going to assume that the
-                # desired rev is a SHA1
-                rev = rev.lower()
-                remote_rev = rev
-                remote_rev_type = "sha1"
-            else:
-                remote_rev = None
-                remote_rev_type = None
-
-        # For the comment field of the state return dict, the remote location
-        # (and short-sha1, if rev is not a sha1) is referenced several times,
-        # determine it once here and reuse the value below.
-        if remote_rev_type == "sha1":
-            if rev == "HEAD":
-                remote_loc = "remote HEAD (" + remote_rev[:7] + ")"
+            remote_rev = None
+            remote_rev_type = None
+        if remote_rev_type == 'sha1':
+            if rev == 'HEAD':
+                remote_loc = 'remote HEAD (' + remote_rev[:7] + ')'
             else:
                 remote_loc = remote_rev[:7]
         elif remote_rev is not None:
-            remote_loc = "{} ({})".format(
-                desired_upstream if remote_rev_type == "branch" else rev, remote_rev[:7]
-            )
+            remote_loc = '{} ({})'.format(desired_upstream if remote_rev_type == 'branch' else rev, remote_rev[:7])
         else:
-            # Shouldn't happen but log a warning here for future
-            # troubleshooting purposes in the event we find a corner case.
-            log.warning(
-                "Unable to determine remote_loc. rev is %s, remote_rev is "
-                "%s, remove_rev_type is %s, desired_upstream is %s, and bare "
-                "is%s set",
-                rev,
-                remote_rev,
-                remote_rev_type,
-                desired_upstream,
-                " not" if not bare else "",
-            )
+            log.warning('Unable to determine remote_loc. rev is %s, remote_rev is %s, remove_rev_type is %s, desired_upstream is %s, and bare is%s set', rev, remote_rev, remote_rev_type, desired_upstream, ' not' if not bare else '')
             remote_loc = None
-
-    if depth is not None and remote_rev_type not in ("branch", "tag"):
-        return _fail(
-            ret,
-            "When 'depth' is used, 'rev' must be set to the name of a "
-            "branch or tag on the remote repository",
-        )
-
-    if remote_rev is None and not bare:
-        if rev != "HEAD":
-            # A specific rev is desired, but that rev doesn't exist on the
-            # remote repo.
-            return _fail(
-                ret,
-                "No revision matching '{}' exists in the remote repository".format(rev),
-            )
-
-    git_ver = _LooseVersion(__salt__["git.version"](versioninfo=False))
-
-    check = "refs" if bare else ".git"
+    if depth is not None and remote_rev_type not in ('branch', 'tag'):
+        return _fail(ret, "When 'depth' is used, 'rev' must be set to the name of a branch or tag on the remote repository")
+    if remote_rev is None and (not bare):
+        if rev != 'HEAD':
+            return _fail(ret, "No revision matching '{}' exists in the remote repository".format(rev))
+    git_ver = _LooseVersion(__salt__['git.version'](versioninfo=False))
+    check = 'refs' if bare else '.git'
     gitdir = os.path.join(target, check)
     comments = []
-    if os.path.isdir(gitdir) or __salt__["git.is_worktree"](
-        target, user=user, password=password, output_encoding=output_encoding
-    ):
-        # Target directory is a git repository or git worktree
+    if os.path.isdir(gitdir) or __salt__['git.is_worktree'](target, user=user, password=password, output_encoding=output_encoding):
         try:
-            all_local_branches = __salt__["git.list_branches"](
-                target, user=user, password=password, output_encoding=output_encoding
-            )
-            all_local_tags = set(
-                __salt__["git.list_tags"](
-                    target,
-                    user=user,
-                    password=password,
-                    output_encoding=output_encoding,
-                )
-            )
-            local_rev, local_branch = _get_local_rev_and_branch(
-                target, user, password, output_encoding
-            )
-
-            if not bare and remote_rev is None and local_rev is not None:
-                return _fail(
-                    ret,
-                    "Remote repository is empty, cannot update from a "
-                    "non-empty to an empty repository",
-                )
-
-            # Base rev and branch are the ones from which any reset or merge
-            # will take place. If the branch is not being specified, the base
-            # will be the "local" rev and branch, i.e. those we began with
-            # before this state was run. If a branch is being specified and it
-            # both exists and is not the one with which we started, then we'll
-            # be checking that branch out first, and it instead becomes our
-            # base. The base branch and rev will be used below in comparisons
-            # to determine what changes to make.
+            all_local_branches = __salt__['git.list_branches'](target, user=user, password=password, output_encoding=output_encoding)
+            all_local_tags = set(__salt__['git.list_tags'](target, user=user, password=password, output_encoding=output_encoding))
+            (local_rev, local_branch) = _get_local_rev_and_branch(target, user, password, output_encoding)
+            if not bare and remote_rev is None and (local_rev is not None):
+                return _fail(ret, 'Remote repository is empty, cannot update from a non-empty to an empty repository')
             base_rev = local_rev
             base_branch = local_branch
             if _need_branch_change(branch, local_branch):
                 if branch not in all_local_branches:
-                    # We're checking out a new branch, so the base_rev and
-                    # remote_rev will be identical.
                     base_rev = remote_rev
                 else:
                     base_branch = branch
-                    # Desired branch exists locally and is not the current
-                    # branch. We'll be performing a checkout to that branch
-                    # eventually, but before we do that we need to find the
-                    # current SHA1.
                     try:
-                        base_rev = __salt__["git.rev_parse"](
-                            target,
-                            branch + "^{commit}",
-                            user=user,
-                            password=password,
-                            ignore_retcode=True,
-                            output_encoding=output_encoding,
-                        )
+                        base_rev = __salt__['git.rev_parse'](target, branch + '^{commit}', user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
                     except CommandExecutionError as exc:
-                        return _fail(
-                            ret,
-                            "Unable to get position of local branch '{}': {}".format(
-                                branch, _strip_exc(exc)
-                            ),
-                            comments,
-                        )
-
-            remotes = __salt__["git.remotes"](
-                target,
-                user=user,
-                password=password,
-                redact_auth=False,
-                output_encoding=output_encoding,
-            )
-
+                        return _fail(ret, "Unable to get position of local branch '{}': {}".format(branch, _strip_exc(exc)), comments)
+            remotes = __salt__['git.remotes'](target, user=user, password=password, redact_auth=False, output_encoding=output_encoding)
             revs_match = _revs_equal(local_rev, remote_rev, remote_rev_type)
             try:
-                # If not a bare repo, check `git diff HEAD` to determine if
-                # there are local changes.
-                local_changes = bool(
-                    not bare
-                    and __salt__["git.diff"](
-                        target,
-                        "HEAD",
-                        user=user,
-                        password=password,
-                        output_encoding=output_encoding,
-                    )
-                )
+                local_changes = bool(not bare and __salt__['git.diff'](target, 'HEAD', user=user, password=password, output_encoding=output_encoding))
             except CommandExecutionError:
-                # No need to capture the error and log it, the _git_run()
-                # helper in the git execution module will have already logged
-                # the output from the command.
-                log.warning(
-                    "git.latest: Unable to determine if %s has local changes", target
-                )
+                log.warning('git.latest: Unable to determine if %s has local changes', target)
                 local_changes = False
-
             if local_changes and revs_match:
                 if force_reset is True:
-                    msg = (
-                        "{} is up-to-date, but with uncommitted changes. "
-                        "Since 'force_reset' is set to True, these local "
-                        "changes would be reset. To only reset when there are "
-                        "changes in the remote repository, set "
-                        "'force_reset' to 'remote-changes'.".format(target)
-                    )
-                    if __opts__["test"]:
-                        ret["changes"]["forced update"] = True
+                    msg = "{} is up-to-date, but with uncommitted changes. Since 'force_reset' is set to True, these local changes would be reset. To only reset when there are changes in the remote repository, set 'force_reset' to 'remote-changes'.".format(target)
+                    if __opts__['test']:
+                        ret['changes']['forced update'] = True
                         if comments:
                             msg += _format_comments(comments)
                         return _neutral_test(ret, msg)
-                    log.debug(msg.replace("would", "will"))
+                    log.debug(msg.replace('would', 'will'))
                 else:
-                    log.debug(
-                        "%s up-to-date, but with uncommitted changes. Since "
-                        "'force_reset' is set to %s, no changes will be "
-                        "made.",
-                        target,
-                        force_reset,
-                    )
-                    return _uptodate(
-                        ret, target, _format_comments(comments), local_changes
-                    )
-
-            if (
-                remote_rev_type == "sha1"
-                and base_rev is not None
-                and base_rev.startswith(remote_rev)
-            ):
-                # Either we're already checked out to the branch we need and it
-                # is up-to-date, or the branch to which we need to switch is
-                # on the same SHA1 as the desired remote revision. Either way,
-                # we know we have the remote rev present already and no fetch
-                # will be needed.
+                    log.debug("%s up-to-date, but with uncommitted changes. Since 'force_reset' is set to %s, no changes will be made.", target, force_reset)
+                    return _uptodate(ret, target, _format_comments(comments), local_changes)
+            if remote_rev_type == 'sha1' and base_rev is not None and base_rev.startswith(remote_rev):
                 has_remote_rev = True
             else:
                 has_remote_rev = False
                 if remote_rev is not None:
                     try:
-                        __salt__["git.rev_parse"](
-                            target,
-                            remote_rev + "^{commit}",
-                            user=user,
-                            password=password,
-                            ignore_retcode=True,
-                            output_encoding=output_encoding,
-                        )
+                        __salt__['git.rev_parse'](target, remote_rev + '^{commit}', user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
                     except CommandExecutionError:
-                        # Local checkout doesn't have the remote_rev
                         pass
                     else:
-                        # The object might exist enough to get a rev-parse to
-                        # work, while the local ref could have been
-                        # deleted/changed/force updated. Do some further sanity
-                        # checks to determine if we really do have the
-                        # remote_rev.
-                        if remote_rev_type == "branch":
+                        if remote_rev_type == 'branch':
                             if remote in remotes:
                                 try:
-                                    # Do a rev-parse on <remote>/<rev> to get
-                                    # the local SHA1 for it, so we can compare
-                                    # it to the remote_rev SHA1.
-                                    local_copy = __salt__["git.rev_parse"](
-                                        target,
-                                        desired_upstream,
-                                        user=user,
-                                        password=password,
-                                        ignore_retcode=True,
-                                        output_encoding=output_encoding,
-                                    )
+                                    local_copy = __salt__['git.rev_parse'](target, desired_upstream, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
                                 except CommandExecutionError:
                                     pass
                                 else:
-                                    # If the SHA1s don't match, then the remote
-                                    # branch was force-updated, and we need to
-                                    # fetch to update our local copy the ref
-                                    # for the remote branch. If they do match,
-                                    # then we have the remote_rev and don't
-                                    # need to fetch.
                                     if local_copy == remote_rev:
                                         has_remote_rev = True
-                        elif remote_rev_type == "tag":
+                        elif remote_rev_type == 'tag':
                             if rev in all_local_tags:
                                 try:
-                                    local_tag_sha1 = __salt__["git.rev_parse"](
-                                        target,
-                                        rev + "^{commit}",
-                                        user=user,
-                                        password=password,
-                                        ignore_retcode=True,
-                                        output_encoding=output_encoding,
-                                    )
+                                    local_tag_sha1 = __salt__['git.rev_parse'](target, rev + '^{commit}', user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
                                 except CommandExecutionError:
-                                    # Shouldn't happen if the tag exists
-                                    # locally but account for this just in
-                                    # case.
                                     local_tag_sha1 = None
                                 if local_tag_sha1 == remote_rev:
                                     has_remote_rev = True
-                                else:
-                                    if not force_reset:
-                                        # SHA1 of tag on remote repo is
-                                        # different than local tag. Unless
-                                        # we're doing a hard reset then we
-                                        # don't need to proceed as we know that
-                                        # the fetch will update the tag and the
-                                        # only way to make the state succeed is
-                                        # to reset the branch to point at the
-                                        # tag's new location.
-                                        return _fail(
-                                            ret,
-                                            "'{}' is a tag, but the remote "
-                                            "SHA1 for this tag ({}) doesn't "
-                                            "match the local SHA1 ({}). Set "
-                                            "'force_reset' to True to force "
-                                            "this update.".format(
-                                                rev,
-                                                _short_sha(remote_rev),
-                                                _short_sha(local_tag_sha1),
-                                            ),
-                                        )
-                        elif remote_rev_type == "sha1":
+                                elif not force_reset:
+                                    return _fail(ret, "'{}' is a tag, but the remote SHA1 for this tag ({}) doesn't match the local SHA1 ({}). Set 'force_reset' to True to force this update.".format(rev, _short_sha(remote_rev), _short_sha(local_tag_sha1)))
+                        elif remote_rev_type == 'sha1':
                             has_remote_rev = True
-
-            # If fast_forward is not boolean, then we don't yet know if this
-            # will be a fast forward or not, because a fetch is required.
-            fast_forward = (
-                False if (local_changes and force_reset != "remote-changes") else None
-            )
-
+            fast_forward = False if local_changes and force_reset != 'remote-changes' else None
             if has_remote_rev:
-                if (not revs_match and not update_head) and (
-                    branch is None or branch == local_branch
-                ):
-                    ret["comment"] = (
-                        "{} is already present and local HEAD ({}) does not "
-                        "match, but update_head=False. HEAD has not been "
-                        "updated locally.".format(
-                            remote_loc.capitalize() if rev == "HEAD" else remote_loc,
-                            local_rev[:7],
-                        )
-                    )
+                if (not revs_match and (not update_head)) and (branch is None or branch == local_branch):
+                    ret['comment'] = '{} is already present and local HEAD ({}) does not match, but update_head=False. HEAD has not been updated locally.'.format(remote_loc.capitalize() if rev == 'HEAD' else remote_loc, local_rev[:7])
                     return ret
-
-                # No need to check if this is a fast_forward if we already know
-                # that it won't be (due to local changes).
                 if fast_forward is not False:
                     if base_rev is None:
-                        # If we're here, the remote_rev exists in the local
-                        # checkout but there is still no HEAD locally. A
-                        # possible reason for this is that an empty repository
-                        # existed there and a remote was added and fetched, but
-                        # the repository was not fast-forwarded. Regardless,
-                        # going from no HEAD to a locally-present rev is
-                        # considered a fast-forward update.
                         fast_forward = True
                     else:
-                        fast_forward = __salt__["git.merge_base"](
-                            target,
-                            refs=[base_rev, remote_rev],
-                            is_ancestor=True,
-                            user=user,
-                            password=password,
-                            ignore_retcode=True,
-                            output_encoding=output_encoding,
-                        )
-
+                        fast_forward = __salt__['git.merge_base'](target, refs=[base_rev, remote_rev], is_ancestor=True, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
             if fast_forward is False:
                 if force_reset is False:
-                    return _not_fast_forward(
-                        ret,
-                        rev,
-                        base_rev,
-                        remote_rev,
-                        branch,
-                        local_branch,
-                        default_branch,
-                        local_changes,
-                        comments,
-                    )
-                merge_action = "hard-reset"
+                    return _not_fast_forward(ret, rev, base_rev, remote_rev, branch, local_branch, default_branch, local_changes, comments)
+                merge_action = 'hard-reset'
             elif fast_forward is True:
-                merge_action = "fast-forwarded"
+                merge_action = 'fast-forwarded'
             else:
-                merge_action = "updated"
-
+                merge_action = 'updated'
             if base_branch is None:
-                # No local branch, no upstream tracking branch
                 upstream = None
             else:
                 try:
-                    upstream = __salt__["git.rev_parse"](
-                        target,
-                        base_branch + "@{upstream}",
-                        opts=["--abbrev-ref"],
-                        user=user,
-                        password=password,
-                        ignore_retcode=True,
-                        output_encoding=output_encoding,
-                    )
+                    upstream = __salt__['git.rev_parse'](target, base_branch + '@{upstream}', opts=['--abbrev-ref'], user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
                 except CommandExecutionError:
-                    # There is a local branch but the rev-parse command
-                    # failed, so that means there is no upstream tracking
-                    # branch. This could be because it is just not set, or
-                    # because the branch was checked out to a SHA1 or tag
-                    # instead of a branch. Set upstream to False to make a
-                    # distinction between the case above where there is no
-                    # local_branch (when the local checkout is an empty
-                    # repository).
                     upstream = False
-
             if remote in remotes:
-                fetch_url = remotes[remote]["fetch"]
+                fetch_url = remotes[remote]['fetch']
             else:
                 log.debug("Remote '%s' not found in git checkout at %s", remote, target)
                 fetch_url = None
-
             if remote_rev is not None and desired_fetch_url != fetch_url:
-                if __opts__["test"]:
-                    actions = [
-                        "Remote '{}' would be changed from {} to {}".format(
-                            remote,
-                            salt.utils.url.redact_http_basic_auth(fetch_url),
-                            redacted_fetch_url,
-                        )
-                    ]
+                if __opts__['test']:
+                    actions = ["Remote '{}' would be changed from {} to {}".format(remote, salt.utils.url.redact_http_basic_auth(fetch_url), redacted_fetch_url)]
                     if not has_remote_rev:
-                        actions.append("Remote would be fetched")
+                        actions.append('Remote would be fetched')
                     if not revs_match:
                         if update_head:
-                            ret["changes"]["revision"] = {
-                                "old": local_rev,
-                                "new": remote_rev,
-                            }
+                            ret['changes']['revision'] = {'old': local_rev, 'new': remote_rev}
                             if fast_forward is False:
-                                ret["changes"]["forced update"] = True
-                            actions.append(
-                                "Repository would be {} to {}".format(
-                                    merge_action, _short_sha(remote_rev)
-                                )
-                            )
-                    if ret["changes"]:
+                                ret['changes']['forced update'] = True
+                            actions.append('Repository would be {} to {}'.format(merge_action, _short_sha(remote_rev)))
+                    if ret['changes']:
                         return _neutral_test(ret, _format_comments(actions))
                     else:
-                        if not revs_match and not update_head:
-                            # Repo content would not be modified but the remote
-                            # URL would be modified, so we can't just say that
-                            # the repo is up-to-date, we need to inform the
-                            # user of the actions taken.
-                            ret["comment"] = _format_comments(actions)
+                        if not revs_match and (not update_head):
+                            ret['comment'] = _format_comments(actions)
                             return ret
                         return _uptodate(ret, target, _format_comments(actions))
-
-                # The fetch_url for the desired remote does not match the
-                # specified URL (or the remote does not exist), so set the
-                # remote URL.
-                __salt__["git.remote_set"](
-                    target,
-                    url=name,
-                    remote=remote,
-                    user=user,
-                    password=password,
-                    https_user=https_user,
-                    https_pass=https_pass,
-                    output_encoding=output_encoding,
-                )
+                __salt__['git.remote_set'](target, url=name, remote=remote, user=user, password=password, https_user=https_user, https_pass=https_pass, output_encoding=output_encoding)
                 if fetch_url is None:
-                    comments.append(
-                        "Remote '{}' set to {}".format(remote, redacted_fetch_url)
-                    )
-                    ret["changes"]["new"] = name + " => " + remote
+                    comments.append("Remote '{}' set to {}".format(remote, redacted_fetch_url))
+                    ret['changes']['new'] = name + ' => ' + remote
                 else:
-                    comments.append(
-                        "Remote '{}' changed from {} to {}".format(
-                            remote,
-                            salt.utils.url.redact_http_basic_auth(fetch_url),
-                            redacted_fetch_url,
-                        )
-                    )
-
+                    comments.append("Remote '{}' changed from {} to {}".format(remote, salt.utils.url.redact_http_basic_auth(fetch_url), redacted_fetch_url))
             if remote_rev is not None:
-                if __opts__["test"]:
+                if __opts__['test']:
                     actions = []
                     if not has_remote_rev:
                         actions.append("Remote '{}' would be fetched".format(remote))
-                    if (not revs_match) and (
-                        update_head or (branch is not None and branch != local_branch)
-                    ):
-                        ret["changes"]["revision"] = {
-                            "old": local_rev,
-                            "new": remote_rev,
-                        }
+                    if not revs_match and (update_head or (branch is not None and branch != local_branch)):
+                        ret['changes']['revision'] = {'old': local_rev, 'new': remote_rev}
                     if _need_branch_change(branch, local_branch):
                         if branch not in all_local_branches:
-                            actions.append(
-                                "New branch '{}' would be checked "
-                                "out, with {} as a starting "
-                                "point".format(branch, remote_loc)
-                            )
+                            actions.append("New branch '{}' would be checked out, with {} as a starting point".format(branch, remote_loc))
                             if desired_upstream:
-                                actions.append(
-                                    "Tracking branch would be set to {}".format(
-                                        desired_upstream
-                                    )
-                                )
+                                actions.append('Tracking branch would be set to {}'.format(desired_upstream))
                         else:
-                            actions.append(
-                                "Branch '{}' would be checked out and {} to {}".format(
-                                    branch, merge_action, _short_sha(remote_rev)
-                                )
-                            )
-                    else:
-                        if not revs_match:
-                            if update_head:
-                                if fast_forward is True:
-                                    actions.append(
-                                        "Repository would be fast-forwarded from "
-                                        "{} to {}".format(
-                                            _short_sha(local_rev),
-                                            _short_sha(remote_rev),
-                                        )
-                                    )
-                                else:
-                                    actions.append(
-                                        "Repository would be {} from {} to {}".format(
-                                            "hard-reset"
-                                            if force_reset and has_remote_rev
-                                            else "updated",
-                                            _short_sha(local_rev),
-                                            _short_sha(remote_rev),
-                                        )
-                                    )
+                            actions.append("Branch '{}' would be checked out and {} to {}".format(branch, merge_action, _short_sha(remote_rev)))
+                    elif not revs_match:
+                        if update_head:
+                            if fast_forward is True:
+                                actions.append('Repository would be fast-forwarded from {} to {}'.format(_short_sha(local_rev), _short_sha(remote_rev)))
                             else:
-                                actions.append(
-                                    "Local HEAD ({}) does not match {} but "
-                                    "update_head=False, HEAD would not be "
-                                    "updated locally".format(local_rev[:7], remote_loc)
-                                )
-
-                    # Check if upstream needs changing
+                                actions.append('Repository would be {} from {} to {}'.format('hard-reset' if force_reset and has_remote_rev else 'updated', _short_sha(local_rev), _short_sha(remote_rev)))
+                        else:
+                            actions.append('Local HEAD ({}) does not match {} but update_head=False, HEAD would not be updated locally'.format(local_rev[:7], remote_loc))
                     if not upstream and desired_upstream:
-                        actions.append(
-                            "Tracking branch would be set to {}".format(
-                                desired_upstream
-                            )
-                        )
+                        actions.append('Tracking branch would be set to {}'.format(desired_upstream))
                     elif upstream and desired_upstream is False:
-                        actions.append("Tracking branch would be unset")
+                        actions.append('Tracking branch would be unset')
                     elif desired_upstream and upstream != desired_upstream:
-                        actions.append(
-                            "Tracking branch would be updated to {}".format(
-                                desired_upstream
-                            )
-                        )
-                    if ret["changes"]:
+                        actions.append('Tracking branch would be updated to {}'.format(desired_upstream))
+                    if ret['changes']:
                         return _neutral_test(ret, _format_comments(actions))
                     else:
                         formatted_actions = _format_comments(actions)
-                        if not revs_match and not update_head and formatted_actions:
-                            ret["comment"] = formatted_actions
+                        if not revs_match and (not update_head) and formatted_actions:
+                            ret['comment'] = formatted_actions
                             return ret
                         return _uptodate(ret, target, _format_comments(actions))
-
                 if not upstream and desired_upstream:
-                    upstream_action = "Tracking branch was set to {}".format(
-                        desired_upstream
-                    )
-                    branch_opts = _get_branch_opts(
-                        branch,
-                        local_branch,
-                        all_local_branches,
-                        desired_upstream,
-                        git_ver,
-                    )
+                    upstream_action = 'Tracking branch was set to {}'.format(desired_upstream)
+                    branch_opts = _get_branch_opts(branch, local_branch, all_local_branches, desired_upstream, git_ver)
                 elif upstream and desired_upstream is False:
-                    # If the remote_rev is a tag or SHA1, and there is an
-                    # upstream tracking branch, we will unset it. However, we
-                    # can only do this if the git version is 1.8.0 or newer, as
-                    # the --unset-upstream option was not added until that
-                    # version.
-                    if git_ver >= _LooseVersion("1.8.0"):
-                        upstream_action = "Tracking branch was unset"
-                        branch_opts = ["--unset-upstream"]
+                    if git_ver >= _LooseVersion('1.8.0'):
+                        upstream_action = 'Tracking branch was unset'
+                        branch_opts = ['--unset-upstream']
                     else:
                         branch_opts = None
                 elif desired_upstream and upstream != desired_upstream:
-                    upstream_action = "Tracking branch was updated to {}".format(
-                        desired_upstream
-                    )
-                    branch_opts = _get_branch_opts(
-                        branch,
-                        local_branch,
-                        all_local_branches,
-                        desired_upstream,
-                        git_ver,
-                    )
+                    upstream_action = 'Tracking branch was updated to {}'.format(desired_upstream)
+                    branch_opts = _get_branch_opts(branch, local_branch, all_local_branches, desired_upstream, git_ver)
                 else:
                     branch_opts = None
-
                 if branch_opts is not None and local_branch is None:
-                    return _fail(
-                        ret,
-                        "Cannot set/unset upstream tracking branch, local "
-                        "HEAD refers to nonexistent branch. This may have "
-                        "been caused by cloning a remote repository for which "
-                        "the default branch was renamed or deleted. If you "
-                        "are unable to fix the remote repository, you can "
-                        "work around this by setting the 'branch' argument "
-                        "(which will ensure that the named branch is created "
-                        "if it does not already exist).",
-                        comments,
-                    )
-                remote_tags = {
-                    x.replace("refs/tags/", "")
-                    for x in __salt__["git.ls_remote"](
-                        cwd=target,
-                        remote=remote,
-                        opts="--tags",
-                        user=user,
-                        password=password,
-                        identity=identity,
-                        saltenv=__env__,
-                        ignore_retcode=True,
-                        output_encoding=output_encoding,
-                    )
-                    if "^{}" not in x
-                }
+                    return _fail(ret, "Cannot set/unset upstream tracking branch, local HEAD refers to nonexistent branch. This may have been caused by cloning a remote repository for which the default branch was renamed or deleted. If you are unable to fix the remote repository, you can work around this by setting the 'branch' argument (which will ensure that the named branch is created if it does not already exist).", comments)
+                remote_tags = {x.replace('refs/tags/', '') for x in __salt__['git.ls_remote'](cwd=target, remote=remote, opts='--tags', user=user, password=password, identity=identity, saltenv=__env__, ignore_retcode=True, output_encoding=output_encoding) if '^{}' not in x}
                 if all_local_tags != remote_tags:
                     has_remote_rev = False
                     new_tags = remote_tags - all_local_tags
                     deleted_tags = all_local_tags - remote_tags
                     if new_tags:
-                        ret["changes"]["new_tags"] = new_tags
+                        ret['changes']['new_tags'] = new_tags
                     if sync_tags and deleted_tags:
-                        # Delete the local copy of the tags to keep up with the
-                        # remote repository.
                         for tag_name in deleted_tags:
                             try:
-                                if not __opts__["test"]:
-                                    __salt__["git.tag"](
-                                        target,
-                                        tag_name,
-                                        opts="-d",
-                                        user=user,
-                                        password=password,
-                                        output_encoding=output_encoding,
-                                    )
+                                if not __opts__['test']:
+                                    __salt__['git.tag'](target, tag_name, opts='-d', user=user, password=password, output_encoding=output_encoding)
                             except CommandExecutionError as exc:
-                                ret.setdefault("warnings", []).append(
-                                    "Failed to remove local tag '{}':\n\n{}\n\n".format(
-                                        tag_name, exc
-                                    )
-                                )
+                                ret.setdefault('warnings', []).append("Failed to remove local tag '{}':\n\n{}\n\n".format(tag_name, exc))
                             else:
-                                ret["changes"].setdefault("deleted_tags", []).append(
-                                    tag_name
-                                )
-
-                        if ret["changes"].get("deleted_tags"):
-                            comments.append(
-                                "The following tags {} removed from the local "
-                                "checkout: {}".format(
-                                    "would be" if __opts__["test"] else "were",
-                                    ", ".join(ret["changes"]["deleted_tags"]),
-                                )
-                            )
-
+                                ret['changes'].setdefault('deleted_tags', []).append(tag_name)
+                        if ret['changes'].get('deleted_tags'):
+                            comments.append('The following tags {} removed from the local checkout: {}'.format('would be' if __opts__['test'] else 'were', ', '.join(ret['changes']['deleted_tags'])))
                 if not has_remote_rev:
                     try:
-                        fetch_changes = __salt__["git.fetch"](
-                            target,
-                            remote=remote,
-                            force=force_fetch,
-                            refspecs=refspecs,
-                            user=user,
-                            password=password,
-                            identity=identity,
-                            saltenv=__env__,
-                            output_encoding=output_encoding,
-                        )
+                        fetch_changes = __salt__['git.fetch'](target, remote=remote, force=force_fetch, refspecs=refspecs, user=user, password=password, identity=identity, saltenv=__env__, output_encoding=output_encoding)
                     except CommandExecutionError as exc:
                         return _failed_fetch(ret, exc, comments)
                     else:
                         if fetch_changes:
-                            comments.append(
-                                "{} was fetched, resulting in updated refs".format(name)
-                            )
-
+                            comments.append('{} was fetched, resulting in updated refs'.format(name))
                     try:
-                        __salt__["git.rev_parse"](
-                            target,
-                            remote_rev + "^{commit}",
-                            user=user,
-                            password=password,
-                            ignore_retcode=True,
-                            output_encoding=output_encoding,
-                        )
+                        __salt__['git.rev_parse'](target, remote_rev + '^{commit}', user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
                     except CommandExecutionError as exc:
-                        return _fail(
-                            ret,
-                            "Fetch did not successfully retrieve rev '{}' "
-                            "from {}: {}".format(rev, name, exc),
-                        )
-
-                    if (not revs_match and not update_head) and (
-                        branch is None or branch == local_branch
-                    ):
-                        # Rev now exists locally (was fetched), and since we're
-                        # not updating HEAD we'll just exit here.
-                        ret["comment"] = (
-                            remote_loc.capitalize() if rev == "HEAD" else remote_loc
-                        )
-                        ret["comment"] += (
-                            " is already present and local HEAD ({}) does not "
-                            "match, but update_head=False. HEAD has not been "
-                            "updated locally.".format(local_rev[:7])
-                        )
+                        return _fail(ret, "Fetch did not successfully retrieve rev '{}' from {}: {}".format(rev, name, exc))
+                    if (not revs_match and (not update_head)) and (branch is None or branch == local_branch):
+                        ret['comment'] = remote_loc.capitalize() if rev == 'HEAD' else remote_loc
+                        ret['comment'] += ' is already present and local HEAD ({}) does not match, but update_head=False. HEAD has not been updated locally.'.format(local_rev[:7])
                         return ret
-
-                    # Now that we've fetched, check again whether or not
-                    # the update is a fast-forward.
                     if base_rev is None:
                         fast_forward = True
                     else:
-                        fast_forward = __salt__["git.merge_base"](
-                            target,
-                            refs=[base_rev, remote_rev],
-                            is_ancestor=True,
-                            user=user,
-                            password=password,
-                            output_encoding=output_encoding,
-                        )
-
-                    if fast_forward is force_reset is False or (
-                        fast_forward is True and local_changes and force_reset is False
-                    ):
-                        return _not_fast_forward(
-                            ret,
-                            rev,
-                            base_rev,
-                            remote_rev,
-                            branch,
-                            local_branch,
-                            default_branch,
-                            local_changes,
-                            comments,
-                        )
-
+                        fast_forward = __salt__['git.merge_base'](target, refs=[base_rev, remote_rev], is_ancestor=True, user=user, password=password, output_encoding=output_encoding)
+                    if fast_forward is force_reset is False or (fast_forward is True and local_changes and (force_reset is False)):
+                        return _not_fast_forward(ret, rev, base_rev, remote_rev, branch, local_branch, default_branch, local_changes, comments)
                 if _need_branch_change(branch, local_branch):
-                    if local_changes and not force_checkout:
-                        return _fail(
-                            ret,
-                            "Local branch '{}' has uncommitted "
-                            "changes. Set 'force_checkout' to True to "
-                            "discard them and proceed.".format(local_branch),
-                        )
-
-                    # TODO: Maybe re-retrieve all_local_branches to handle
-                    # the corner case where the destination branch was
-                    # added to the local checkout during a fetch that takes
-                    # a long time to complete.
+                    if local_changes and (not force_checkout):
+                        return _fail(ret, "Local branch '{}' has uncommitted changes. Set 'force_checkout' to True to discard them and proceed.".format(local_branch))
                     if branch not in all_local_branches:
-                        if rev == "HEAD":
+                        if rev == 'HEAD':
                             checkout_rev = remote_rev
                         else:
                             checkout_rev = desired_upstream if desired_upstream else rev
-                        checkout_opts = ["-b", branch]
+                        checkout_opts = ['-b', branch]
                     else:
                         checkout_rev = branch
                         checkout_opts = []
-                    __salt__["git.checkout"](
-                        target,
-                        checkout_rev,
-                        force=force_checkout,
-                        opts=checkout_opts,
-                        user=user,
-                        password=password,
-                        output_encoding=output_encoding,
-                    )
-                    if "-b" in checkout_opts:
-                        comments.append(
-                            "New branch '{}' was checked out, with {} "
-                            "as a starting point".format(branch, remote_loc)
-                        )
+                    __salt__['git.checkout'](target, checkout_rev, force=force_checkout, opts=checkout_opts, user=user, password=password, output_encoding=output_encoding)
+                    if '-b' in checkout_opts:
+                        comments.append("New branch '{}' was checked out, with {} as a starting point".format(branch, remote_loc))
                     else:
                         comments.append("'{}' was checked out".format(checkout_rev))
-
                 if fast_forward is False:
-                    __salt__["git.reset"](
-                        target,
-                        opts=["--hard", remote_rev],
-                        user=user,
-                        password=password,
-                        output_encoding=output_encoding,
-                        **lfs_opts
-                    )
-                    ret["changes"]["forced update"] = True
+                    __salt__['git.reset'](target, opts=['--hard', remote_rev], user=user, password=password, output_encoding=output_encoding, **lfs_opts)
+                    ret['changes']['forced update'] = True
                     if local_changes:
-                        comments.append("Uncommitted changes were discarded")
-                    comments.append(
-                        "Repository was hard-reset to {}".format(remote_loc)
-                    )
-                elif (
-                    fast_forward is True and local_changes and force_reset is not False
-                ):
-                    __salt__["git.discard_local_changes"](
-                        target,
-                        user=user,
-                        password=password,
-                        output_encoding=output_encoding,
-                    )
-                    comments.append("Uncommitted changes were discarded")
-
+                        comments.append('Uncommitted changes were discarded')
+                    comments.append('Repository was hard-reset to {}'.format(remote_loc))
+                elif fast_forward is True and local_changes and (force_reset is not False):
+                    __salt__['git.discard_local_changes'](target, user=user, password=password, output_encoding=output_encoding)
+                    comments.append('Uncommitted changes were discarded')
                 if branch_opts is not None:
-                    __salt__["git.branch"](
-                        target,
-                        opts=branch_opts,
-                        user=user,
-                        password=password,
-                        output_encoding=output_encoding,
-                    )
+                    __salt__['git.branch'](target, opts=branch_opts, user=user, password=password, output_encoding=output_encoding)
                     comments.append(upstream_action)
-
-                # Fast-forward to the desired revision
-                if fast_forward is True and not _revs_equal(
-                    base_rev, remote_rev, remote_rev_type
-                ):
-                    if desired_upstream or rev == "HEAD":
-                        # Check first to see if we are on a branch before
-                        # trying to merge changes. (The call to
-                        # git.symbolic_ref will only return output if HEAD
-                        # points to a branch.)
-                        if __salt__["git.symbolic_ref"](
-                            target,
-                            "HEAD",
-                            opts=["--quiet"],
-                            user=user,
-                            password=password,
-                            ignore_retcode=True,
-                            output_encoding=output_encoding,
-                        ):
-
-                            if git_ver >= _LooseVersion("1.8.1.6"):
-                                # --ff-only added in version 1.8.1.6. It's not
-                                # 100% necessary, but if we can use it, we'll
-                                # ensure that the merge doesn't go through if
-                                # not a fast-forward. Granted, the logic that
-                                # gets us to this point shouldn't allow us to
-                                # attempt this merge if it's not a
-                                # fast-forward, but it's an extra layer of
-                                # protection.
-                                merge_opts = ["--ff-only"]
+                if fast_forward is True and (not _revs_equal(base_rev, remote_rev, remote_rev_type)):
+                    if desired_upstream or rev == 'HEAD':
+                        if __salt__['git.symbolic_ref'](target, 'HEAD', opts=['--quiet'], user=user, password=password, ignore_retcode=True, output_encoding=output_encoding):
+                            if git_ver >= _LooseVersion('1.8.1.6'):
+                                merge_opts = ['--ff-only']
                             else:
                                 merge_opts = []
-
-                            __salt__["git.merge"](
-                                target,
-                                rev=remote_rev,
-                                opts=merge_opts,
-                                user=user,
-                                password=password,
-                                output_encoding=output_encoding,
-                                **lfs_opts
-                            )
-                            comments.append(
-                                "Repository was fast-forwarded to {}".format(remote_loc)
-                            )
+                            __salt__['git.merge'](target, rev=remote_rev, opts=merge_opts, user=user, password=password, output_encoding=output_encoding, **lfs_opts)
+                            comments.append('Repository was fast-forwarded to {}'.format(remote_loc))
                         else:
-                            return _fail(
-                                ret,
-                                "Unable to fast-forward, HEAD is detached",
-                                comments,
-                            )
+                            return _fail(ret, 'Unable to fast-forward, HEAD is detached', comments)
                     else:
-                        # Update is a fast forward, but we cannot merge to that
-                        # commit so we'll reset to it.
-                        __salt__["git.reset"](
-                            target,
-                            opts=["--hard", remote_rev if rev == "HEAD" else rev],
-                            user=user,
-                            password=password,
-                            output_encoding=output_encoding,
-                            **lfs_opts
-                        )
-                        comments.append(
-                            "Repository was reset to {} (fast-forward)".format(rev)
-                        )
-
-                # TODO: Figure out how to add submodule update info to
-                # test=True return data, and changes dict.
+                        __salt__['git.reset'](target, opts=['--hard', remote_rev if rev == 'HEAD' else rev], user=user, password=password, output_encoding=output_encoding, **lfs_opts)
+                        comments.append('Repository was reset to {} (fast-forward)'.format(rev))
                 if submodules:
                     try:
-                        __salt__["git.submodule"](
-                            target,
-                            "update",
-                            opts=["--init", "--recursive"],
-                            user=user,
-                            password=password,
-                            identity=identity,
-                            saltenv=__env__,
-                            output_encoding=output_encoding,
-                        )
+                        __salt__['git.submodule'](target, 'update', opts=['--init', '--recursive'], user=user, password=password, identity=identity, saltenv=__env__, output_encoding=output_encoding)
                     except CommandExecutionError as exc:
                         return _failed_submodule_update(ret, exc, comments)
             elif bare:
-                if __opts__["test"]:
-                    msg = "Bare repository at {} would be fetched".format(target)
-                    if ret["changes"]:
+                if __opts__['test']:
+                    msg = 'Bare repository at {} would be fetched'.format(target)
+                    if ret['changes']:
                         return _neutral_test(ret, msg)
                     else:
                         return _uptodate(ret, target, msg)
                 try:
-                    fetch_changes = __salt__["git.fetch"](
-                        target,
-                        remote=remote,
-                        force=force_fetch,
-                        refspecs=refspecs,
-                        user=user,
-                        password=password,
-                        identity=identity,
-                        saltenv=__env__,
-                        output_encoding=output_encoding,
-                    )
+                    fetch_changes = __salt__['git.fetch'](target, remote=remote, force=force_fetch, refspecs=refspecs, user=user, password=password, identity=identity, saltenv=__env__, output_encoding=output_encoding)
                 except CommandExecutionError as exc:
                     return _failed_fetch(ret, exc, comments)
                 else:
-                    comments.append(
-                        "Bare repository at {} was fetched{}".format(
-                            target,
-                            ", resulting in updated refs" if fetch_changes else "",
-                        )
-                    )
+                    comments.append('Bare repository at {} was fetched{}'.format(target, ', resulting in updated refs' if fetch_changes else ''))
             try:
-                new_rev = __salt__["git.revision"](
-                    cwd=target,
-                    user=user,
-                    password=password,
-                    ignore_retcode=True,
-                    output_encoding=output_encoding,
-                )
+                new_rev = __salt__['git.revision'](cwd=target, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
             except CommandExecutionError:
                 new_rev = None
-
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("Unexpected exception in git.latest state", exc_info=True)
+        except Exception as exc:
+            log.error('Unexpected exception in git.latest state', exc_info=True)
             if isinstance(exc, CommandExecutionError):
                 msg = _strip_exc(exc)
             else:
                 msg = str(exc)
             return _fail(ret, msg, comments)
-
-        if not bare and not _revs_equal(new_rev, remote_rev, remote_rev_type):
-            return _fail(ret, "Failed to update repository", comments)
-
+        if not bare and (not _revs_equal(new_rev, remote_rev, remote_rev_type)):
+            return _fail(ret, 'Failed to update repository', comments)
         if local_rev != new_rev:
-            log.info("Repository %s updated: %s => %s", target, local_rev, new_rev)
-            ret["comment"] = _format_comments(comments)
-            ret["changes"]["revision"] = {"old": local_rev, "new": new_rev}
+            log.info('Repository %s updated: %s => %s', target, local_rev, new_rev)
+            ret['comment'] = _format_comments(comments)
+            ret['changes']['revision'] = {'old': local_rev, 'new': new_rev}
         else:
             return _uptodate(ret, target, _format_comments(comments))
     else:
         if os.path.isdir(target):
             target_contents = os.listdir(target)
             if force_clone:
-                # Clone is required, and target directory exists, but the
-                # ``force`` option is enabled, so we need to clear out its
-                # contents to proceed.
-                if __opts__["test"]:
-                    ret["changes"]["forced clone"] = True
-                    ret["changes"]["new"] = name + " => " + target
-                    return _neutral_test(
-                        ret,
-                        "Target directory {0} exists. Since force_clone=True, "
-                        "the contents of {0} would be deleted, and {1} would "
-                        "be cloned into this directory.".format(target, name),
-                    )
-                log.debug(
-                    "Removing contents of %s to clone repository %s in its "
-                    "place (force_clone=True set in git.latest state)",
-                    target,
-                    name,
-                )
+                if __opts__['test']:
+                    ret['changes']['forced clone'] = True
+                    ret['changes']['new'] = name + ' => ' + target
+                    return _neutral_test(ret, 'Target directory {0} exists. Since force_clone=True, the contents of {0} would be deleted, and {1} would be cloned into this directory.'.format(target, name))
+                log.debug('Removing contents of %s to clone repository %s in its place (force_clone=True set in git.latest state)', target, name)
                 removal_errors = {}
                 for target_object in target_contents:
                     target_path = os.path.join(target, target_object)
@@ -1726,277 +930,97 @@ def latest(
                         if exc.errno != errno.ENOENT:
                             removal_errors[target_path] = exc
                 if removal_errors:
-                    err_strings = [
-                        "  {}\n    {}".format(k, v) for k, v in removal_errors.items()
-                    ]
-                    return _fail(
-                        ret,
-                        "Unable to remove\n{}".format("\n".join(err_strings)),
-                        comments,
-                    )
-                ret["changes"]["forced clone"] = True
-            # Clone is required, but target dir exists and is non-empty. We
-            # can't proceed.
+                    err_strings = ['  {}\n    {}'.format(k, v) for (k, v) in removal_errors.items()]
+                    return _fail(ret, 'Unable to remove\n{}'.format('\n'.join(err_strings)), comments)
+                ret['changes']['forced clone'] = True
             elif target_contents:
-                return _fail(
-                    ret,
-                    "Target '{}' exists, is non-empty and is not a git "
-                    "repository. Set the 'force_clone' option to True to "
-                    "remove this directory's contents and proceed with "
-                    "cloning the remote repository".format(target),
-                )
-
+                return _fail(ret, "Target '{}' exists, is non-empty and is not a git repository. Set the 'force_clone' option to True to remove this directory's contents and proceed with cloning the remote repository".format(target))
         log.debug("Target %s is not found, 'git clone' is required", target)
-        if __opts__["test"]:
-            ret["changes"]["new"] = name + " => " + target
-            return _neutral_test(
-                ret, "Repository {} would be cloned to {}".format(name, target)
-            )
+        if __opts__['test']:
+            ret['changes']['new'] = name + ' => ' + target
+            return _neutral_test(ret, 'Repository {} would be cloned to {}'.format(name, target))
         try:
-            clone_opts = ["--mirror"] if mirror else ["--bare"] if bare else []
-            if remote != "origin":
-                clone_opts.extend(["--origin", remote])
+            clone_opts = ['--mirror'] if mirror else ['--bare'] if bare else []
+            if remote != 'origin':
+                clone_opts.extend(['--origin', remote])
             if depth is not None:
-                clone_opts.extend(["--depth", str(depth), "--branch", rev])
-
-            # We're cloning a fresh repo, there is no local branch or revision
+                clone_opts.extend(['--depth', str(depth), '--branch', rev])
             local_branch = local_rev = None
-
             try:
-                __salt__["git.clone"](
-                    target,
-                    name,
-                    user=user,
-                    password=password,
-                    opts=clone_opts,
-                    identity=identity,
-                    https_user=https_user,
-                    https_pass=https_pass,
-                    saltenv=__env__,
-                    output_encoding=output_encoding,
-                )
+                __salt__['git.clone'](target, name, user=user, password=password, opts=clone_opts, identity=identity, https_user=https_user, https_pass=https_pass, saltenv=__env__, output_encoding=output_encoding)
             except CommandExecutionError as exc:
-                msg = "Clone failed: {}".format(_strip_exc(exc))
+                msg = 'Clone failed: {}'.format(_strip_exc(exc))
                 return _fail(ret, msg, comments)
-
-            ret["changes"]["new"] = name + " => " + target
-            comments.append(
-                "{} cloned to {}{}".format(
-                    name,
-                    target,
-                    " as mirror" if mirror else " as bare repository" if bare else "",
-                )
-            )
-
+            ret['changes']['new'] = name + ' => ' + target
+            comments.append('{} cloned to {}{}'.format(name, target, ' as mirror' if mirror else ' as bare repository' if bare else ''))
             if not bare:
                 if not remote_rev:
-                    if rev != "HEAD":
-                        # No HEAD means the remote repo is empty, which means
-                        # our new clone will also be empty. This state has
-                        # failed, since a rev was specified but no matching rev
-                        # exists on the remote host.
-                        msg = (
-                            "%s was cloned but is empty, so {}/{} "
-                            "cannot be checked out".format(remote, rev)
-                        )
+                    if rev != 'HEAD':
+                        msg = '%s was cloned but is empty, so {}/{} cannot be checked out'.format(remote, rev)
                         log.error(msg, name)
-                        # Disable check for string substitution
-                        return _fail(
-                            ret, msg % "Repository", comments
-                        )  # pylint: disable=E1321
+                        return _fail(ret, msg % 'Repository', comments)
                 else:
-                    if remote_rev_type == "tag" and rev not in __salt__[
-                        "git.list_tags"
-                    ](
-                        target,
-                        user=user,
-                        password=password,
-                        output_encoding=output_encoding,
-                    ):
-                        return _fail(
-                            ret,
-                            "Revision '{}' does not exist in clone".format(rev),
-                            comments,
-                        )
-
+                    if remote_rev_type == 'tag' and rev not in __salt__['git.list_tags'](target, user=user, password=password, output_encoding=output_encoding):
+                        return _fail(ret, "Revision '{}' does not exist in clone".format(rev), comments)
                     if branch is not None:
-                        if branch not in __salt__["git.list_branches"](
-                            target,
-                            user=user,
-                            password=password,
-                            output_encoding=output_encoding,
-                        ):
-                            if rev == "HEAD":
+                        if branch not in __salt__['git.list_branches'](target, user=user, password=password, output_encoding=output_encoding):
+                            if rev == 'HEAD':
                                 checkout_rev = remote_rev
                             else:
-                                checkout_rev = (
-                                    desired_upstream if desired_upstream else rev
-                                )
-                            __salt__["git.checkout"](
-                                target,
-                                checkout_rev,
-                                opts=["-b", branch],
-                                user=user,
-                                password=password,
-                                output_encoding=output_encoding,
-                            )
-                            comments.append(
-                                "Branch '{}' checked out, with {} "
-                                "as a starting point".format(branch, remote_loc)
-                            )
-
-                    local_rev, local_branch = _get_local_rev_and_branch(
-                        target, user, password, output_encoding=output_encoding
-                    )
-
-                    if (
-                        local_branch is None
-                        and remote_rev is not None
-                        and "HEAD" not in all_remote_refs
-                    ):
-                        return _fail(
-                            ret,
-                            "Remote HEAD refers to a ref that does not exist. "
-                            "This can happen when the default branch on the "
-                            "remote repository is renamed or deleted. If you "
-                            "are unable to fix the remote repository, you can "
-                            "work around this by setting the 'branch' argument "
-                            "(which will ensure that the named branch is created "
-                            "if it does not already exist).",
-                            comments,
-                        )
-
+                                checkout_rev = desired_upstream if desired_upstream else rev
+                            __salt__['git.checkout'](target, checkout_rev, opts=['-b', branch], user=user, password=password, output_encoding=output_encoding)
+                            comments.append("Branch '{}' checked out, with {} as a starting point".format(branch, remote_loc))
+                    (local_rev, local_branch) = _get_local_rev_and_branch(target, user, password, output_encoding=output_encoding)
+                    if local_branch is None and remote_rev is not None and ('HEAD' not in all_remote_refs):
+                        return _fail(ret, "Remote HEAD refers to a ref that does not exist. This can happen when the default branch on the remote repository is renamed or deleted. If you are unable to fix the remote repository, you can work around this by setting the 'branch' argument (which will ensure that the named branch is created if it does not already exist).", comments)
                     if not _revs_equal(local_rev, remote_rev, remote_rev_type):
-                        __salt__["git.reset"](
-                            target,
-                            opts=["--hard", remote_rev],
-                            user=user,
-                            password=password,
-                            output_encoding=output_encoding,
-                        )
-                        comments.append("Repository was reset to {}".format(remote_loc))
-
+                        __salt__['git.reset'](target, opts=['--hard', remote_rev], user=user, password=password, output_encoding=output_encoding)
+                        comments.append('Repository was reset to {}'.format(remote_loc))
                     try:
-                        upstream = __salt__["git.rev_parse"](
-                            target,
-                            local_branch + "@{upstream}",
-                            opts=["--abbrev-ref"],
-                            user=user,
-                            password=password,
-                            ignore_retcode=True,
-                            output_encoding=output_encoding,
-                        )
+                        upstream = __salt__['git.rev_parse'](target, local_branch + '@{upstream}', opts=['--abbrev-ref'], user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
                     except CommandExecutionError:
                         upstream = False
-
                     if not upstream and desired_upstream:
-                        upstream_action = "Tracking branch was set to {}".format(
-                            desired_upstream
-                        )
-                        branch_opts = _get_branch_opts(
-                            branch,
-                            local_branch,
-                            __salt__["git.list_branches"](
-                                target,
-                                user=user,
-                                password=password,
-                                output_encoding=output_encoding,
-                            ),
-                            desired_upstream,
-                            git_ver,
-                        )
+                        upstream_action = 'Tracking branch was set to {}'.format(desired_upstream)
+                        branch_opts = _get_branch_opts(branch, local_branch, __salt__['git.list_branches'](target, user=user, password=password, output_encoding=output_encoding), desired_upstream, git_ver)
                     elif upstream and desired_upstream is False:
-                        # If the remote_rev is a tag or SHA1, and there is an
-                        # upstream tracking branch, we will unset it. However,
-                        # we can only do this if the git version is 1.8.0 or
-                        # newer, as the --unset-upstream option was not added
-                        # until that version.
-                        if git_ver >= _LooseVersion("1.8.0"):
-                            upstream_action = "Tracking branch was unset"
-                            branch_opts = ["--unset-upstream"]
+                        if git_ver >= _LooseVersion('1.8.0'):
+                            upstream_action = 'Tracking branch was unset'
+                            branch_opts = ['--unset-upstream']
                         else:
                             branch_opts = None
                     elif desired_upstream and upstream != desired_upstream:
-                        upstream_action = "Tracking branch was updated to {}".format(
-                            desired_upstream
-                        )
-                        branch_opts = _get_branch_opts(
-                            branch,
-                            local_branch,
-                            __salt__["git.list_branches"](
-                                target,
-                                user=user,
-                                password=password,
-                                output_encoding=output_encoding,
-                            ),
-                            desired_upstream,
-                            git_ver,
-                        )
+                        upstream_action = 'Tracking branch was updated to {}'.format(desired_upstream)
+                        branch_opts = _get_branch_opts(branch, local_branch, __salt__['git.list_branches'](target, user=user, password=password, output_encoding=output_encoding), desired_upstream, git_ver)
                     else:
                         branch_opts = None
-
                     if branch_opts is not None:
-                        __salt__["git.branch"](
-                            target,
-                            opts=branch_opts,
-                            user=user,
-                            password=password,
-                            output_encoding=output_encoding,
-                        )
+                        __salt__['git.branch'](target, opts=branch_opts, user=user, password=password, output_encoding=output_encoding)
                         comments.append(upstream_action)
-
             if submodules and remote_rev:
                 try:
-                    __salt__["git.submodule"](
-                        target,
-                        "update",
-                        opts=["--init", "--recursive"],
-                        user=user,
-                        password=password,
-                        identity=identity,
-                        output_encoding=output_encoding,
-                    )
+                    __salt__['git.submodule'](target, 'update', opts=['--init', '--recursive'], user=user, password=password, identity=identity, output_encoding=output_encoding)
                 except CommandExecutionError as exc:
                     return _failed_submodule_update(ret, exc, comments)
-
             try:
-                new_rev = __salt__["git.revision"](
-                    cwd=target,
-                    user=user,
-                    password=password,
-                    ignore_retcode=True,
-                    output_encoding=output_encoding,
-                )
+                new_rev = __salt__['git.revision'](cwd=target, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
             except CommandExecutionError:
                 new_rev = None
-
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("Unexpected exception in git.latest state", exc_info=True)
+        except Exception as exc:
+            log.error('Unexpected exception in git.latest state', exc_info=True)
             if isinstance(exc, CommandExecutionError):
                 msg = _strip_exc(exc)
             else:
                 msg = str(exc)
             return _fail(ret, msg, comments)
-
         msg = _format_comments(comments)
         log.info(msg)
-        ret["comment"] = msg
+        ret['comment'] = msg
         if new_rev is not None:
-            ret["changes"]["revision"] = {"old": None, "new": new_rev}
+            ret['changes']['revision'] = {'old': None, 'new': new_rev}
     return ret
 
-
-def present(
-    name,
-    force=False,
-    bare=True,
-    template=None,
-    separate_git_dir=None,
-    shared=None,
-    user=None,
-    password=None,
-    output_encoding=None,
-):
+def present(name, force=False, bare=True, template=None, separate_git_dir=None, shared=None, user=None, password=None, output_encoding=None):
     """
     Ensure that a repository exists in the given directory
 
@@ -2071,109 +1095,47 @@ def present(
     .. _`git-init(1)`: http://git-scm.com/docs/git-init
     .. _`worktree`: http://git-scm.com/docs/git-worktree
     """
-    ret = {"name": name, "result": True, "comment": "", "changes": {}}
-
-    # If the named directory is a git repo return True
+    ret = {'name': name, 'result': True, 'comment': '', 'changes': {}}
     if os.path.isdir(name):
-        if bare and os.path.isfile(os.path.join(name, "HEAD")):
+        if bare and os.path.isfile(os.path.join(name, 'HEAD')):
             return ret
-        elif not bare and (
-            os.path.isdir(os.path.join(name, ".git"))
-            or __salt__["git.is_worktree"](
-                name, user=user, password=password, output_encoding=output_encoding
-            )
-        ):
+        elif not bare and (os.path.isdir(os.path.join(name, '.git')) or __salt__['git.is_worktree'](name, user=user, password=password, output_encoding=output_encoding)):
             return ret
-        # Directory exists and is not a git repo, if force is set destroy the
-        # directory and recreate, otherwise throw an error
         elif force:
-            # Directory exists, and the ``force`` option is enabled, so we need
-            # to clear out its contents to proceed.
-            if __opts__["test"]:
-                ret["changes"]["new"] = name
-                ret["changes"]["forced init"] = True
-                return _neutral_test(
-                    ret,
-                    "Target directory {0} exists. Since force=True, the "
-                    "contents of {0} would be deleted, and a {1}repository "
-                    "would be initialized in its place.".format(
-                        name, "bare " if bare else ""
-                    ),
-                )
-            log.debug(
-                "Removing contents of %s to initialize %srepository in its "
-                "place (force=True set in git.present state)",
-                name,
-                "bare " if bare else "",
-            )
+            if __opts__['test']:
+                ret['changes']['new'] = name
+                ret['changes']['forced init'] = True
+                return _neutral_test(ret, 'Target directory {0} exists. Since force=True, the contents of {0} would be deleted, and a {1}repository would be initialized in its place.'.format(name, 'bare ' if bare else ''))
+            log.debug('Removing contents of %s to initialize %srepository in its place (force=True set in git.present state)', name, 'bare ' if bare else '')
             try:
                 if os.path.islink(name):
                     os.unlink(name)
                 else:
                     salt.utils.files.rm_rf(name)
             except OSError as exc:
-                return _fail(ret, "Unable to remove {}: {}".format(name, exc))
+                return _fail(ret, 'Unable to remove {}: {}'.format(name, exc))
             else:
-                ret["changes"]["forced init"] = True
+                ret['changes']['forced init'] = True
         elif os.listdir(name):
-            return _fail(
-                ret,
-                "Target '{}' exists, is non-empty, and is not a git "
-                "repository. Set the 'force' option to True to remove "
-                "this directory's contents and proceed with initializing a "
-                "repository".format(name),
-            )
-
-    # Run test is set
-    if __opts__["test"]:
-        ret["changes"]["new"] = name
-        return _neutral_test(
-            ret, "New {}repository would be created".format("bare " if bare else "")
-        )
-
-    __salt__["git.init"](
-        cwd=name,
-        bare=bare,
-        template=template,
-        separate_git_dir=separate_git_dir,
-        shared=shared,
-        user=user,
-        password=password,
-        output_encoding=output_encoding,
-    )
-
-    actions = ["Initialized {}repository in {}".format("bare " if bare else "", name)]
+            return _fail(ret, "Target '{}' exists, is non-empty, and is not a git repository. Set the 'force' option to True to remove this directory's contents and proceed with initializing a repository".format(name))
+    if __opts__['test']:
+        ret['changes']['new'] = name
+        return _neutral_test(ret, 'New {}repository would be created'.format('bare ' if bare else ''))
+    __salt__['git.init'](cwd=name, bare=bare, template=template, separate_git_dir=separate_git_dir, shared=shared, user=user, password=password, output_encoding=output_encoding)
+    actions = ['Initialized {}repository in {}'.format('bare ' if bare else '', name)]
     if template:
-        actions.append("Template directory set to {}".format(template))
+        actions.append('Template directory set to {}'.format(template))
     if separate_git_dir:
-        actions.append("Gitdir set to {}".format(separate_git_dir))
-    message = ". ".join(actions)
+        actions.append('Gitdir set to {}'.format(separate_git_dir))
+    message = '. '.join(actions)
     if len(actions) > 1:
-        message += "."
+        message += '.'
     log.info(message)
-    ret["changes"]["new"] = name
-    ret["comment"] = message
+    ret['changes']['new'] = name
+    ret['comment'] = message
     return ret
 
-
-def detached(
-    name,
-    rev,
-    target,
-    remote="origin",
-    user=None,
-    password=None,
-    force_clone=False,
-    force_checkout=False,
-    fetch_remote=True,
-    hard_reset=False,
-    submodules=False,
-    identity=None,
-    https_user=None,
-    https_pass=None,
-    output_encoding=None,
-    **kwargs
-):
+def detached(name, rev, target, remote='origin', user=None, password=None, force_clone=False, force_checkout=False, fetch_remote=True, hard_reset=False, submodules=False, identity=None, https_user=None, https_pass=None, output_encoding=None, **kwargs):
     """
     .. versionadded:: 2016.3.0
 
@@ -2255,24 +1217,14 @@ def detached(
 
         .. versionadded:: 2018.3.1
     """
-
-    ret = {"name": name, "result": True, "comment": "", "changes": {}}
-
+    ret = {'name': name, 'result': True, 'comment': '', 'changes': {}}
     kwargs = salt.utils.args.clean_kwargs(**kwargs)
     if kwargs:
         return _fail(ret, salt.utils.args.invalid_kwargs(kwargs, raise_exc=False))
-
     if not rev:
-        return _fail(
-            ret, "'{}' is not a valid value for the 'rev' argument".format(rev)
-        )
-
+        return _fail(ret, "'{}' is not a valid value for the 'rev' argument".format(rev))
     if not target:
-        return _fail(
-            ret, "'{}' is not a valid value for the 'target' argument".format(rev)
-        )
-
-    # Ensure that certain arguments are strings to ensure that comparisons work
+        return _fail(ret, "'{}' is not a valid value for the 'target' argument".format(rev))
     if not isinstance(rev, str):
         rev = str(rev)
     if target is not None:
@@ -2280,146 +1232,72 @@ def detached(
             target = str(target)
         if not os.path.isabs(target):
             return _fail(ret, "Target '{}' is not an absolute path".format(target))
-    if user is not None and not isinstance(user, str):
+    if user is not None and (not isinstance(user, str)):
         user = str(user)
-    if remote is not None and not isinstance(remote, str):
+    if remote is not None and (not isinstance(remote, str)):
         remote = str(remote)
     if identity is not None:
         if isinstance(identity, str):
             identity = [identity]
         elif not isinstance(identity, list):
-            return _fail(ret, "Identity must be either a list or a string")
+            return _fail(ret, 'Identity must be either a list or a string')
         identity = [os.path.expanduser(x) for x in identity]
         for ident_path in identity:
-            if "salt://" in ident_path:
+            if 'salt://' in ident_path:
                 try:
-                    ident_path = __salt__["cp.cache_file"](ident_path)
+                    ident_path = __salt__['cp.cache_file'](ident_path)
                 except OSError as exc:
-                    log.error("Failed to cache %s: %s", ident_path, exc)
-                    return _fail(
-                        ret, "Identity '{}' does not exist.".format(ident_path)
-                    )
+                    log.error('Failed to cache %s: %s', ident_path, exc)
+                    return _fail(ret, "Identity '{}' does not exist.".format(ident_path))
             if not os.path.isabs(ident_path):
-                return _fail(
-                    ret, "Identity '{}' is not an absolute path".format(ident_path)
-                )
-    if https_user is not None and not isinstance(https_user, str):
+                return _fail(ret, "Identity '{}' is not an absolute path".format(ident_path))
+    if https_user is not None and (not isinstance(https_user, str)):
         https_user = str(https_user)
-    if https_pass is not None and not isinstance(https_pass, str):
+    if https_pass is not None and (not isinstance(https_pass, str)):
         https_pass = str(https_pass)
-
     if os.path.isfile(target):
-        return _fail(
-            ret,
-            "Target '{}' exists and is a regular file, cannot proceed".format(target),
-        )
-
+        return _fail(ret, "Target '{}' exists and is a regular file, cannot proceed".format(target))
     try:
-        desired_fetch_url = salt.utils.url.add_http_basic_auth(
-            name, https_user, https_pass, https_only=True
-        )
+        desired_fetch_url = salt.utils.url.add_http_basic_auth(name, https_user, https_pass, https_only=True)
     except ValueError as exc:
         return _fail(ret, exc.__str__())
-
     redacted_fetch_url = salt.utils.url.redact_http_basic_auth(desired_fetch_url)
-
-    # Determine if supplied ref is a hash
-    remote_rev_type = "ref"
-    if len(rev) <= 40 and all(x in string.hexdigits for x in rev):
+    remote_rev_type = 'ref'
+    if len(rev) <= 40 and all((x in string.hexdigits for x in rev)):
         rev = rev.lower()
-        remote_rev_type = "hash"
-
+        remote_rev_type = 'hash'
     comments = []
     hash_exists_locally = False
     local_commit_id = None
-
-    gitdir = os.path.join(target, ".git")
-    if os.path.isdir(gitdir) or __salt__["git.is_worktree"](
-        target, user=user, password=password, output_encoding=output_encoding
-    ):
-        # Target directory is a git repository or git worktree
-
-        local_commit_id = _get_local_rev_and_branch(
-            target, user, password, output_encoding=output_encoding
-        )[0]
-
-        if remote_rev_type == "hash":
+    gitdir = os.path.join(target, '.git')
+    if os.path.isdir(gitdir) or __salt__['git.is_worktree'](target, user=user, password=password, output_encoding=output_encoding):
+        local_commit_id = _get_local_rev_and_branch(target, user, password, output_encoding=output_encoding)[0]
+        if remote_rev_type == 'hash':
             try:
-                __salt__["git.describe"](
-                    target,
-                    rev,
-                    user=user,
-                    password=password,
-                    ignore_retcode=True,
-                    output_encoding=output_encoding,
-                )
+                __salt__['git.describe'](target, rev, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
             except CommandExecutionError:
                 hash_exists_locally = False
             else:
-                # The rev is a hash and it exists locally so skip to checkout
                 hash_exists_locally = True
         else:
-            # Check that remote is present and set to correct url
-            remotes = __salt__["git.remotes"](
-                target,
-                user=user,
-                password=password,
-                redact_auth=False,
-                output_encoding=output_encoding,
-            )
-
-            if remote in remotes and name in remotes[remote]["fetch"]:
+            remotes = __salt__['git.remotes'](target, user=user, password=password, redact_auth=False, output_encoding=output_encoding)
+            if remote in remotes and name in remotes[remote]['fetch']:
                 pass
             else:
-                # The fetch_url for the desired remote does not match the
-                # specified URL (or the remote does not exist), so set the
-                # remote URL.
                 current_fetch_url = None
                 if remote in remotes:
-                    current_fetch_url = remotes[remote]["fetch"]
-
-                if __opts__["test"]:
-                    return _neutral_test(
-                        ret, "Remote {} would be set to {}".format(remote, name)
-                    )
-
-                __salt__["git.remote_set"](
-                    target,
-                    url=name,
-                    remote=remote,
-                    user=user,
-                    password=password,
-                    https_user=https_user,
-                    https_pass=https_pass,
-                    output_encoding=output_encoding,
-                )
-                comments.append(
-                    "Remote {} updated from '{}' to '{}'".format(
-                        remote, current_fetch_url, name
-                    )
-                )
-
+                    current_fetch_url = remotes[remote]['fetch']
+                if __opts__['test']:
+                    return _neutral_test(ret, 'Remote {} would be set to {}'.format(remote, name))
+                __salt__['git.remote_set'](target, url=name, remote=remote, user=user, password=password, https_user=https_user, https_pass=https_pass, output_encoding=output_encoding)
+                comments.append("Remote {} updated from '{}' to '{}'".format(remote, current_fetch_url, name))
     else:
-        # Clone repository
         if os.path.isdir(target):
             target_contents = os.listdir(target)
             if force_clone:
-                # Clone is required, and target directory exists, but the
-                # ``force`` option is enabled, so we need to clear out its
-                # contents to proceed.
-                if __opts__["test"]:
-                    return _neutral_test(
-                        ret,
-                        "Target directory {0} exists. Since force_clone=True, "
-                        "the contents of {0} would be deleted, and {1} would "
-                        "be cloned into this directory.".format(target, name),
-                    )
-                log.debug(
-                    "Removing contents of %s to clone repository %s in its "
-                    "place (force_clone=True set in git.detached state)",
-                    target,
-                    name,
-                )
+                if __opts__['test']:
+                    return _neutral_test(ret, 'Target directory {0} exists. Since force_clone=True, the contents of {0} would be deleted, and {1} would be cloned into this directory.'.format(target, name))
+                log.debug('Removing contents of %s to clone repository %s in its place (force_clone=True set in git.detached state)', target, name)
                 removal_errors = {}
                 for target_object in target_contents:
                     target_path = os.path.join(target, target_object)
@@ -2429,214 +1307,89 @@ def detached(
                         if exc.errno != errno.ENOENT:
                             removal_errors[target_path] = exc
                 if removal_errors:
-                    err_strings = [
-                        "  {}\n    {}".format(k, v) for k, v in removal_errors.items()
-                    ]
-                    return _fail(
-                        ret,
-                        "Unable to remove\n{}".format("\n".join(err_strings)),
-                        comments,
-                    )
-                ret["changes"]["forced clone"] = True
+                    err_strings = ['  {}\n    {}'.format(k, v) for (k, v) in removal_errors.items()]
+                    return _fail(ret, 'Unable to remove\n{}'.format('\n'.join(err_strings)), comments)
+                ret['changes']['forced clone'] = True
             elif target_contents:
-                # Clone is required, but target dir exists and is non-empty. We
-                # can't proceed.
-                return _fail(
-                    ret,
-                    "Target '{}' exists, is non-empty and is not a git "
-                    "repository. Set the 'force_clone' option to True to "
-                    "remove this directory's contents and proceed with "
-                    "cloning the remote repository".format(target),
-                )
-
+                return _fail(ret, "Target '{}' exists, is non-empty and is not a git repository. Set the 'force_clone' option to True to remove this directory's contents and proceed with cloning the remote repository".format(target))
         log.debug("Target %s is not found, 'git clone' is required", target)
-        if __opts__["test"]:
-            return _neutral_test(
-                ret, "Repository {} would be cloned to {}".format(name, target)
-            )
+        if __opts__['test']:
+            return _neutral_test(ret, 'Repository {} would be cloned to {}'.format(name, target))
         try:
-            clone_opts = ["--no-checkout"]
-            if remote != "origin":
-                clone_opts.extend(["--origin", remote])
-
-            __salt__["git.clone"](
-                target,
-                name,
-                user=user,
-                password=password,
-                opts=clone_opts,
-                identity=identity,
-                https_user=https_user,
-                https_pass=https_pass,
-                saltenv=__env__,
-                output_encoding=output_encoding,
-            )
-            comments.append("{} cloned to {}".format(name, target))
-
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("Unexpected exception in git.detached state", exc_info=True)
+            clone_opts = ['--no-checkout']
+            if remote != 'origin':
+                clone_opts.extend(['--origin', remote])
+            __salt__['git.clone'](target, name, user=user, password=password, opts=clone_opts, identity=identity, https_user=https_user, https_pass=https_pass, saltenv=__env__, output_encoding=output_encoding)
+            comments.append('{} cloned to {}'.format(name, target))
+        except Exception as exc:
+            log.error('Unexpected exception in git.detached state', exc_info=True)
             if isinstance(exc, CommandExecutionError):
                 msg = _strip_exc(exc)
             else:
                 msg = str(exc)
             return _fail(ret, msg, comments)
-
-    # Repository exists and is ready for fetch/checkout
-    refspecs = [
-        "refs/heads/*:refs/remotes/{}/*".format(remote),
-        "+refs/tags/*:refs/tags/*",
-    ]
+    refspecs = ['refs/heads/*:refs/remotes/{}/*'.format(remote), '+refs/tags/*:refs/tags/*']
     if hash_exists_locally or fetch_remote is False:
         pass
     else:
-        # Fetch refs from remote
-        if __opts__["test"]:
-            return _neutral_test(
-                ret, "Repository remote {} would be fetched".format(remote)
-            )
+        if __opts__['test']:
+            return _neutral_test(ret, 'Repository remote {} would be fetched'.format(remote))
         try:
-            fetch_changes = __salt__["git.fetch"](
-                target,
-                remote=remote,
-                force=True,
-                refspecs=refspecs,
-                user=user,
-                password=password,
-                identity=identity,
-                saltenv=__env__,
-                output_encoding=output_encoding,
-            )
+            fetch_changes = __salt__['git.fetch'](target, remote=remote, force=True, refspecs=refspecs, user=user, password=password, identity=identity, saltenv=__env__, output_encoding=output_encoding)
         except CommandExecutionError as exc:
-            msg = "Fetch failed"
-            msg += ":\n\n" + str(exc)
+            msg = 'Fetch failed'
+            msg += ':\n\n' + str(exc)
             return _fail(ret, msg, comments)
         else:
             if fetch_changes:
-                comments.append(
-                    "Remote {} was fetched, resulting in updated refs".format(remote)
-                )
-
-    # get refs and checkout
-    checkout_commit_id = ""
-    if remote_rev_type == "hash":
-        if __salt__["git.describe"](
-            target, rev, user=user, password=password, output_encoding=output_encoding
-        ):
+                comments.append('Remote {} was fetched, resulting in updated refs'.format(remote))
+    checkout_commit_id = ''
+    if remote_rev_type == 'hash':
+        if __salt__['git.describe'](target, rev, user=user, password=password, output_encoding=output_encoding):
             checkout_commit_id = rev
         else:
             return _fail(ret, "Revision '{}' does not exist".format(rev))
     else:
         try:
-            all_remote_refs = __salt__["git.remote_refs"](
-                target,
-                user=user,
-                password=password,
-                identity=identity,
-                https_user=https_user,
-                https_pass=https_pass,
-                ignore_retcode=False,
-                output_encoding=output_encoding,
-            )
-
-            if "refs/remotes/" + remote + "/" + rev in all_remote_refs:
-                checkout_commit_id = all_remote_refs[
-                    "refs/remotes/" + remote + "/" + rev
-                ]
-            elif "refs/tags/" + rev in all_remote_refs:
-                checkout_commit_id = all_remote_refs["refs/tags/" + rev]
+            all_remote_refs = __salt__['git.remote_refs'](target, user=user, password=password, identity=identity, https_user=https_user, https_pass=https_pass, ignore_retcode=False, output_encoding=output_encoding)
+            if 'refs/remotes/' + remote + '/' + rev in all_remote_refs:
+                checkout_commit_id = all_remote_refs['refs/remotes/' + remote + '/' + rev]
+            elif 'refs/tags/' + rev in all_remote_refs:
+                checkout_commit_id = all_remote_refs['refs/tags/' + rev]
             else:
                 return _fail(ret, "Revision '{}' does not exist".format(rev))
-
         except CommandExecutionError as exc:
-            return _fail(
-                ret, "Failed to list refs for {}: {}".format(remote, _strip_exc(exc))
-            )
-
+            return _fail(ret, 'Failed to list refs for {}: {}'.format(remote, _strip_exc(exc)))
     if hard_reset:
-        if __opts__["test"]:
-            return _neutral_test(
-                ret, "Hard reset to HEAD would be performed on {}".format(target)
-            )
-        __salt__["git.reset"](
-            target,
-            opts=["--hard", "HEAD"],
-            user=user,
-            password=password,
-            output_encoding=output_encoding,
-        )
-        comments.append("Repository was reset to HEAD before checking out revision")
-
-    # TODO: implement clean function for git module and add clean flag
-
+        if __opts__['test']:
+            return _neutral_test(ret, 'Hard reset to HEAD would be performed on {}'.format(target))
+        __salt__['git.reset'](target, opts=['--hard', 'HEAD'], user=user, password=password, output_encoding=output_encoding)
+        comments.append('Repository was reset to HEAD before checking out revision')
     if checkout_commit_id == local_commit_id:
         new_rev = None
     else:
-        if __opts__["test"]:
-            ret["changes"]["HEAD"] = {"old": local_commit_id, "new": checkout_commit_id}
-            return _neutral_test(
-                ret,
-                "Commit ID {} would be checked out at {}".format(
-                    checkout_commit_id, target
-                ),
-            )
-        __salt__["git.checkout"](
-            target,
-            checkout_commit_id,
-            force=force_checkout,
-            user=user,
-            password=password,
-            output_encoding=output_encoding,
-        )
-        comments.append(
-            "Commit ID {} was checked out at {}".format(checkout_commit_id, target)
-        )
-
+        if __opts__['test']:
+            ret['changes']['HEAD'] = {'old': local_commit_id, 'new': checkout_commit_id}
+            return _neutral_test(ret, 'Commit ID {} would be checked out at {}'.format(checkout_commit_id, target))
+        __salt__['git.checkout'](target, checkout_commit_id, force=force_checkout, user=user, password=password, output_encoding=output_encoding)
+        comments.append('Commit ID {} was checked out at {}'.format(checkout_commit_id, target))
         try:
-            new_rev = __salt__["git.revision"](
-                cwd=target,
-                user=user,
-                password=password,
-                ignore_retcode=True,
-                output_encoding=output_encoding,
-            )
+            new_rev = __salt__['git.revision'](cwd=target, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
         except CommandExecutionError:
             new_rev = None
-
     if submodules:
-        __salt__["git.submodule"](
-            target,
-            "update",
-            opts=["--init", "--recursive"],
-            user=user,
-            password=password,
-            identity=identity,
-            output_encoding=output_encoding,
-        )
-        comments.append("Submodules were updated")
-
+        __salt__['git.submodule'](target, 'update', opts=['--init', '--recursive'], user=user, password=password, identity=identity, output_encoding=output_encoding)
+        comments.append('Submodules were updated')
     if new_rev is not None:
-        ret["changes"]["HEAD"] = {"old": local_commit_id, "new": new_rev}
+        ret['changes']['HEAD'] = {'old': local_commit_id, 'new': new_rev}
     else:
-        comments.append("Already checked out at correct revision")
-
+        comments.append('Already checked out at correct revision')
     msg = _format_comments(comments)
     log.info(msg)
-    ret["comment"] = msg
-
+    ret['comment'] = msg
     return ret
 
-
-def cloned(
-    name,
-    target,
-    branch=None,
-    user=None,
-    password=None,
-    identity=None,
-    https_user=None,
-    https_pass=None,
-    output_encoding=None,
-):
+def cloned(name, target, branch=None, user=None, password=None, identity=None, https_user=None, https_pass=None, output_encoding=None):
     """
     .. versionadded:: 2018.3.3,2019.2.0
 
@@ -2690,156 +1443,95 @@ def cloned(
             created with filenames using an encoding other than UTF-8 to handle
             Unicode characters.
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
-
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if target is None:
-        ret["comment"] = "'target' argument is required"
+        ret['comment'] = "'target' argument is required"
         return ret
     elif not isinstance(target, str):
         target = str(target)
-
     if not os.path.isabs(target):
-        ret["comment"] = "'target' path must be absolute"
+        ret['comment'] = "'target' path must be absolute"
         return ret
-
     if branch is not None:
         if not isinstance(branch, str):
             branch = str(branch)
         if not branch:
-            ret["comment"] = "Invalid 'branch' argument"
+            ret['comment'] = "Invalid 'branch' argument"
             return ret
-
     if not os.path.exists(target):
         need_clone = True
     else:
         try:
-            __salt__["git.status"](
-                target, user=user, password=password, output_encoding=output_encoding
-            )
-        except Exception as exc:  # pylint: disable=broad-except
-            ret["comment"] = str(exc)
+            __salt__['git.status'](target, user=user, password=password, output_encoding=output_encoding)
+        except Exception as exc:
+            ret['comment'] = str(exc)
             return ret
         else:
             need_clone = False
-
     comments = []
 
     def _clone_changes(ret):
-        ret["changes"]["new"] = name + " => " + target
+        ret['changes']['new'] = name + ' => ' + target
 
     def _branch_changes(ret, old, new):
-        ret["changes"]["branch"] = {"old": old, "new": new}
-
+        ret['changes']['branch'] = {'old': old, 'new': new}
     if need_clone:
-        if __opts__["test"]:
+        if __opts__['test']:
             _clone_changes(ret)
-            comment = "{} would be cloned to {}{}".format(
-                name,
-                target,
-                " with branch '{}'".format(branch) if branch is not None else "",
-            )
+            comment = '{} would be cloned to {}{}'.format(name, target, " with branch '{}'".format(branch) if branch is not None else '')
             return _neutral_test(ret, comment)
-        clone_opts = ["--branch", branch] if branch is not None else None
+        clone_opts = ['--branch', branch] if branch is not None else None
         try:
-            __salt__["git.clone"](
-                target,
-                name,
-                opts=clone_opts,
-                user=user,
-                password=password,
-                identity=identity,
-                https_user=https_user,
-                https_pass=https_pass,
-                output_encoding=output_encoding,
-            )
+            __salt__['git.clone'](target, name, opts=clone_opts, user=user, password=password, identity=identity, https_user=https_user, https_pass=https_pass, output_encoding=output_encoding)
         except CommandExecutionError as exc:
-            msg = "Clone failed: {}".format(_strip_exc(exc))
+            msg = 'Clone failed: {}'.format(_strip_exc(exc))
             return _fail(ret, msg, comments)
-
-        comments.append(
-            "{} cloned to {}{}".format(
-                name,
-                target,
-                " with branch '{}'".format(branch) if branch is not None else "",
-            )
-        )
+        comments.append('{} cloned to {}{}'.format(name, target, " with branch '{}'".format(branch) if branch is not None else ''))
         _clone_changes(ret)
-        ret["comment"] = _format_comments(comments)
-        ret["result"] = True
+        ret['comment'] = _format_comments(comments)
+        ret['result'] = True
         return ret
+    elif branch is None:
+        return _already_cloned(ret, target, branch, comments)
     else:
-        if branch is None:
+        current_branch = __salt__['git.current_branch'](target, user=user, password=password, output_encoding=output_encoding)
+        if current_branch == branch:
             return _already_cloned(ret, target, branch, comments)
         else:
-            current_branch = __salt__["git.current_branch"](
-                target, user=user, password=password, output_encoding=output_encoding
-            )
-            if current_branch == branch:
-                return _already_cloned(ret, target, branch, comments)
+            if __opts__['test']:
+                _branch_changes(ret, current_branch, branch)
+                return _neutral_test(ret, "Branch would be changed to '{}'".format(branch))
+            try:
+                __salt__['git.rev_parse'](target, rev=branch, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding)
+            except CommandExecutionError:
+                checkout_rev = '/'.join(('origin', branch))
+                checkout_opts = ['-b', branch]
             else:
-                if __opts__["test"]:
-                    _branch_changes(ret, current_branch, branch)
-                    return _neutral_test(
-                        ret, "Branch would be changed to '{}'".format(branch)
-                    )
-                try:
-                    __salt__["git.rev_parse"](
-                        target,
-                        rev=branch,
-                        user=user,
-                        password=password,
-                        ignore_retcode=True,
-                        output_encoding=output_encoding,
-                    )
-                except CommandExecutionError:
-                    # Local head does not exist, so we need to check out a new
-                    # branch at the remote rev
-                    checkout_rev = "/".join(("origin", branch))
-                    checkout_opts = ["-b", branch]
-                else:
-                    # Local head exists, so we just need to check it out
-                    checkout_rev = branch
-                    checkout_opts = None
+                checkout_rev = branch
+                checkout_opts = None
+            try:
+                __salt__['git.checkout'](target, rev=checkout_rev, opts=checkout_opts, user=user, password=password, output_encoding=output_encoding)
+            except CommandExecutionError as exc:
+                msg = "Failed to change branch to '{}': {}".format(branch, exc)
+                return _fail(ret, msg, comments)
+            else:
+                comments.append("Branch changed to '{}'".format(branch))
+                _branch_changes(ret, current_branch, branch)
+                ret['comment'] = _format_comments(comments)
+                ret['result'] = True
+                return ret
 
-                try:
-                    __salt__["git.checkout"](
-                        target,
-                        rev=checkout_rev,
-                        opts=checkout_opts,
-                        user=user,
-                        password=password,
-                        output_encoding=output_encoding,
-                    )
-                except CommandExecutionError as exc:
-                    msg = "Failed to change branch to '{}': {}".format(branch, exc)
-                    return _fail(ret, msg, comments)
-                else:
-                    comments.append("Branch changed to '{}'".format(branch))
-                    _branch_changes(ret, current_branch, branch)
-                    ret["comment"] = _format_comments(comments)
-                    ret["result"] = True
-                    return ret
-
-
-def config_unset(
-    name,
-    value_regex=None,
-    repo=None,
-    user=None,
-    password=None,
-    output_encoding=None,
-    **kwargs
-):
-    r"""
+def config_unset(name, value_regex=None, repo=None, user=None, password=None, output_encoding=None, **kwargs):
+    """
     .. versionadded:: 2015.8.0
 
     Ensure that the named config key is not present
 
     name
         The name of the configuration key to unset. This value can be a regex,
-        but the regex must match the entire key name. For example, ``foo\.``
+        but the regex must match the entire key name. For example, ``foo\\.``
         would not match all keys in the ``foo`` section, it would be necessary
-        to use ``foo\..+`` to do so.
+        to use ``foo\\..+`` to do so.
 
     value_regex
         Regex indicating the values to unset for the matching key(s)
@@ -2904,7 +1596,7 @@ def config_unset(
         # Ensure all variables in 'foo' section are unset, including multivars
         mylocalrepo:
           git.config_unset:
-            - name: 'foo\..+'
+            - name: 'foo\\..+'
             - all: True
 
         # Ensure that global config value is unset
@@ -2913,178 +1605,68 @@ def config_unset(
             - name: foo.bar
             - global: True
     """
-    ret = {
-        "name": name,
-        "changes": {},
-        "result": True,
-        "comment": "No matching keys are set",
-    }
-
-    # Sanitize kwargs and make sure that no invalid ones were passed. This
-    # allows us to accept 'global' as an argument to this function without
-    # shadowing global(), while also not allowing unwanted arguments to be
-    # passed.
+    ret = {'name': name, 'changes': {}, 'result': True, 'comment': 'No matching keys are set'}
     kwargs = salt.utils.args.clean_kwargs(**kwargs)
-    global_ = kwargs.pop("global", False)
-    all_ = kwargs.pop("all", False)
+    global_ = kwargs.pop('global', False)
+    all_ = kwargs.pop('all', False)
     if kwargs:
         return _fail(ret, salt.utils.args.invalid_kwargs(kwargs, raise_exc=False))
-
-    if not global_ and not repo:
-        return _fail(
-            ret, "Non-global config options require the 'repo' argument to be set"
-        )
-
+    if not global_ and (not repo):
+        return _fail(ret, "Non-global config options require the 'repo' argument to be set")
     if not isinstance(name, str):
         name = str(name)
     if value_regex is not None:
         if not isinstance(value_regex, str):
             value_regex = str(value_regex)
-
-    # Ensure that the key regex matches the full key name
-    key = "^" + name.lstrip("^").rstrip("$") + "$"
-
-    # Get matching keys/values
-    pre_matches = __salt__["git.config_get_regexp"](
-        cwd=repo,
-        key=key,
-        value_regex=value_regex,
-        user=user,
-        password=password,
-        ignore_retcode=True,
-        output_encoding=output_encoding,
-        **{"global": global_}
-    )
-
+    key = '^' + name.lstrip('^').rstrip('$') + '$'
+    pre_matches = __salt__['git.config_get_regexp'](cwd=repo, key=key, value_regex=value_regex, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding, **{'global': global_})
     if not pre_matches:
-        # No changes need to be made
         return ret
-
-    # Perform sanity check on the matches. We can't proceed if the value_regex
-    # matches more than one value in a given key, and 'all' is not set to True
     if not all_:
-        greedy_matches = [
-            "{} ({})".format(x, ", ".join(y))
-            for x, y in pre_matches.items()
-            if len(y) > 1
-        ]
+        greedy_matches = ['{} ({})'.format(x, ', '.join(y)) for (x, y) in pre_matches.items() if len(y) > 1]
         if greedy_matches:
             if value_regex is not None:
-                return _fail(
-                    ret,
-                    "Multiple values are matched by value_regex for the "
-                    "following keys (set 'all' to True to force removal): "
-                    "{}".format("; ".join(greedy_matches)),
-                )
+                return _fail(ret, "Multiple values are matched by value_regex for the following keys (set 'all' to True to force removal): {}".format('; '.join(greedy_matches)))
             else:
-                return _fail(
-                    ret,
-                    "Multivar(s) matched by the key expression (set 'all' "
-                    "to True to force removal): {}".format("; ".join(greedy_matches)),
-                )
-
-    if __opts__["test"]:
-        ret["changes"] = pre_matches
-        return _neutral_test(
-            ret, "{} key(s) would have value(s) unset".format(len(pre_matches))
-        )
-
+                return _fail(ret, "Multivar(s) matched by the key expression (set 'all' to True to force removal): {}".format('; '.join(greedy_matches)))
+    if __opts__['test']:
+        ret['changes'] = pre_matches
+        return _neutral_test(ret, '{} key(s) would have value(s) unset'.format(len(pre_matches)))
     if value_regex is None:
         pre = pre_matches
     else:
-        # Get all keys matching the key expression, so we can accurately report
-        # on changes made.
-        pre = __salt__["git.config_get_regexp"](
-            cwd=repo,
-            key=key,
-            value_regex=None,
-            user=user,
-            password=password,
-            ignore_retcode=True,
-            output_encoding=output_encoding,
-            **{"global": global_}
-        )
-
+        pre = __salt__['git.config_get_regexp'](cwd=repo, key=key, value_regex=None, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding, **{'global': global_})
     failed = []
-    # Unset the specified value(s). There is no unset for regexes so loop
-    # through the pre_matches dict and unset each matching key individually.
     for key_name in pre_matches:
         try:
-            __salt__["git.config_unset"](
-                cwd=repo,
-                key=name,
-                value_regex=value_regex,
-                all=all_,
-                user=user,
-                password=password,
-                output_encoding=output_encoding,
-                **{"global": global_}
-            )
+            __salt__['git.config_unset'](cwd=repo, key=name, value_regex=value_regex, all=all_, user=user, password=password, output_encoding=output_encoding, **{'global': global_})
         except CommandExecutionError as exc:
             msg = "Failed to unset '{}'".format(key_name)
             if value_regex is not None:
                 msg += " using value_regex '{1}'"
-            msg += ": " + _strip_exc(exc)
+            msg += ': ' + _strip_exc(exc)
             log.error(msg)
             failed.append(key_name)
-
     if failed:
-        return _fail(
-            ret,
-            "Error(s) occurred unsetting values for the following keys (see "
-            "the minion log for details): {}".format(", ".join(failed)),
-        )
-
-    post = __salt__["git.config_get_regexp"](
-        cwd=repo,
-        key=key,
-        value_regex=None,
-        user=user,
-        password=password,
-        ignore_retcode=True,
-        output_encoding=output_encoding,
-        **{"global": global_}
-    )
-
+        return _fail(ret, 'Error(s) occurred unsetting values for the following keys (see the minion log for details): {}'.format(', '.join(failed)))
+    post = __salt__['git.config_get_regexp'](cwd=repo, key=key, value_regex=None, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding, **{'global': global_})
     for key_name in pre:
         if key_name not in post:
-            ret["changes"][key_name] = pre[key_name]
+            ret['changes'][key_name] = pre[key_name]
         unset = [x for x in pre[key_name] if x not in post[key_name]]
         if unset:
-            ret["changes"][key_name] = unset
-
+            ret['changes'][key_name] = unset
     if value_regex is None:
         post_matches = post
     else:
-        post_matches = __salt__["git.config_get_regexp"](
-            cwd=repo,
-            key=key,
-            value_regex=value_regex,
-            user=user,
-            password=password,
-            ignore_retcode=True,
-            output_encoding=output_encoding,
-            **{"global": global_}
-        )
-
+        post_matches = __salt__['git.config_get_regexp'](cwd=repo, key=key, value_regex=value_regex, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding, **{'global': global_})
     if post_matches:
-        failed = ["{} ({})".format(x, ", ".join(y)) for x, y in post_matches.items()]
-        return _fail(ret, "Failed to unset value(s): {}".format("; ".join(failed)))
-
-    ret["comment"] = "Value(s) successfully unset"
+        failed = ['{} ({})'.format(x, ', '.join(y)) for (x, y) in post_matches.items()]
+        return _fail(ret, 'Failed to unset value(s): {}'.format('; '.join(failed)))
+    ret['comment'] = 'Value(s) successfully unset'
     return ret
 
-
-def config_set(
-    name,
-    value=None,
-    multivar=None,
-    repo=None,
-    user=None,
-    password=None,
-    output_encoding=None,
-    **kwargs
-):
+def config_set(name, value=None, multivar=None, repo=None, user=None, password=None, output_encoding=None, **kwargs):
     """
     .. versionadded:: 2014.7.0
     .. versionchanged:: 2015.8.0
@@ -3170,25 +1752,15 @@ def config_set(
             - user: foo
             - global: True
     """
-    ret = {"name": name, "changes": {}, "result": True, "comment": ""}
-
+    ret = {'name': name, 'changes': {}, 'result': True, 'comment': ''}
     if value is not None and multivar is not None:
         return _fail(ret, "Only one of 'value' and 'multivar' is permitted")
-
-    # Sanitize kwargs and make sure that no invalid ones were passed. This
-    # allows us to accept 'global' as an argument to this function without
-    # shadowing global(), while also not allowing unwanted arguments to be
-    # passed.
     kwargs = salt.utils.args.clean_kwargs(**kwargs)
-    global_ = kwargs.pop("global", False)
+    global_ = kwargs.pop('global', False)
     if kwargs:
         return _fail(ret, salt.utils.args.invalid_kwargs(kwargs, raise_exc=False))
-
-    if not global_ and not repo:
-        return _fail(
-            ret, "Non-global config options require the 'repo' argument to be set"
-        )
-
+    if not global_ and (not repo):
+        return _fail(ret, "Non-global config options require the 'repo' argument to be set")
     if not isinstance(name, str):
         name = str(name)
     if value is not None:
@@ -3199,9 +1771,9 @@ def config_set(
     if multivar is not None:
         if not isinstance(multivar, list):
             try:
-                multivar = multivar.split(",")
+                multivar = multivar.split(',')
             except AttributeError:
-                multivar = str(multivar).split(",")
+                multivar = str(multivar).split(',')
         else:
             new_multivar = []
             for item in multivar:
@@ -3212,69 +1784,21 @@ def config_set(
             multivar = new_multivar
         value_comment = multivar
         desired = multivar
-
-    # Get current value
-    pre = __salt__["git.config_get"](
-        cwd=repo,
-        key=name,
-        user=user,
-        password=password,
-        ignore_retcode=True,
-        output_encoding=output_encoding,
-        **{"all": True, "global": global_}
-    )
-
+    pre = __salt__['git.config_get'](cwd=repo, key=name, user=user, password=password, ignore_retcode=True, output_encoding=output_encoding, **{'all': True, 'global': global_})
     if desired == pre:
-        ret["comment"] = "{}'{}' is already set to {}".format(
-            "Global key " if global_ else "", name, value_comment
-        )
+        ret['comment'] = "{}'{}' is already set to {}".format('Global key ' if global_ else '', name, value_comment)
         return ret
-
-    if __opts__["test"]:
-        ret["changes"] = {"old": pre, "new": desired}
-        msg = "{}'{}' would be {} {}".format(
-            "Global key " if global_ else "",
-            name,
-            "added as" if pre is None else "set to",
-            value_comment,
-        )
+    if __opts__['test']:
+        ret['changes'] = {'old': pre, 'new': desired}
+        msg = "{}'{}' would be {} {}".format('Global key ' if global_ else '', name, 'added as' if pre is None else 'set to', value_comment)
         return _neutral_test(ret, msg)
-
     try:
-        # Set/update config value
-        post = __salt__["git.config_set"](
-            cwd=repo,
-            key=name,
-            value=value,
-            multivar=multivar,
-            user=user,
-            password=password,
-            output_encoding=output_encoding,
-            **{"global": global_}
-        )
+        post = __salt__['git.config_set'](cwd=repo, key=name, value=value, multivar=multivar, user=user, password=password, output_encoding=output_encoding, **{'global': global_})
     except CommandExecutionError as exc:
-        return _fail(
-            ret,
-            "Failed to set {}'{}' to {}: {}".format(
-                "global key " if global_ else "", name, value_comment, _strip_exc(exc)
-            ),
-        )
-
+        return _fail(ret, "Failed to set {}'{}' to {}: {}".format('global key ' if global_ else '', name, value_comment, _strip_exc(exc)))
     if pre != post:
-        ret["changes"][name] = {"old": pre, "new": post}
-
+        ret['changes'][name] = {'old': pre, 'new': post}
     if post != desired:
-        return _fail(
-            ret,
-            "Failed to set {}'{}' to {}".format(
-                "global key " if global_ else "", name, value_comment
-            ),
-        )
-
-    ret["comment"] = "{}'{}' was {} {}".format(
-        "Global key " if global_ else "",
-        name,
-        "added as" if pre is None else "set to",
-        value_comment,
-    )
+        return _fail(ret, "Failed to set {}'{}' to {}".format('global key ' if global_ else '', name, value_comment))
+    ret['comment'] = "{}'{}' was {} {}".format('Global key ' if global_ else '', name, 'added as' if pre is None else 'set to', value_comment)
     return ret

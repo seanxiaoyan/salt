@@ -143,29 +143,15 @@ Associated states are documented in
 Look there to find an example structure for Pillar as well as an example
 ``.sls`` file for configuring an ESX virtual machine from scratch.
 """
-
-
 import logging
 import os
-
 import salt.exceptions as excs
 from salt.utils.dictupdate import merge
-
-# This must be present or the Salt loader won't load this module.
-__proxyenabled__ = ["esxvm"]
-
-
-# Variables are scoped to this module so we can have persistent data
-# across calls to fns in here.
+log = logging.getLogger(__name__)
+__proxyenabled__ = ['esxvm']
 GRAINS_CACHE = {}
 DETAILS = {}
-
-
-# Set up logging
-log = logging.getLogger(__name__)
-# Define the module's virtual name
-__virtualname__ = "esxvm"
-
+__virtualname__ = 'esxvm'
 
 def __virtual__():
     """
@@ -173,69 +159,42 @@ def __virtual__():
     """
     return __virtualname__
 
-
 def init(opts):
-    """
-    This function gets called when the proxy starts up. For
-    login the protocol and port are cached.
-    """
-    log.debug("Initting esxvm proxy module in process %s", os.getpid())
-    log.debug("Validating esxvm proxy input")
-    proxy_conf = merge(opts.get("proxy", {}), __pillar__.get("proxy", {}))
-    log.trace("proxy_conf = %s", proxy_conf)
-    # TODO json schema validation
-
-    # Save mandatory fields in cache
-    for key in ("vcenter", "datacenter", "mechanism"):
+    log.info('Trace')
+    '\n    This function gets called when the proxy starts up. For\n    login the protocol and port are cached.\n    '
+    log.debug('Initting esxvm proxy module in process %s', os.getpid())
+    log.debug('Validating esxvm proxy input')
+    proxy_conf = merge(opts.get('proxy', {}), __pillar__.get('proxy', {}))
+    log.trace('proxy_conf = %s', proxy_conf)
+    for key in ('vcenter', 'datacenter', 'mechanism'):
         DETAILS[key] = proxy_conf[key]
-
-    # Additional validation
-    if DETAILS["mechanism"] == "userpass":
-        if "username" not in proxy_conf:
-            raise excs.InvalidProxyInputError(
-                "Mechanism is set to 'userpass' , but no "
-                "'username' key found in pillar for this proxy."
-            )
-        if "passwords" not in proxy_conf:
-            raise excs.InvalidProxyInputError(
-                "Mechanism is set to 'userpass' , but no "
-                "'passwords' key found in pillar for this proxy."
-            )
-        for key in ("username", "passwords"):
+    if DETAILS['mechanism'] == 'userpass':
+        log.info('Trace')
+        if 'username' not in proxy_conf:
+            raise excs.InvalidProxyInputError("Mechanism is set to 'userpass' , but no 'username' key found in pillar for this proxy.")
+        if 'passwords' not in proxy_conf:
+            raise excs.InvalidProxyInputError("Mechanism is set to 'userpass' , but no 'passwords' key found in pillar for this proxy.")
+        for key in ('username', 'passwords'):
             DETAILS[key] = proxy_conf[key]
     else:
-        if "domain" not in proxy_conf:
-            raise excs.InvalidProxyInputError(
-                "Mechanism is set to 'sspi' , but no "
-                "'domain' key found in pillar for this proxy."
-            )
-        if "principal" not in proxy_conf:
-            raise excs.InvalidProxyInputError(
-                "Mechanism is set to 'sspi' , but no "
-                "'principal' key found in pillar for this proxy."
-            )
-        for key in ("domain", "principal"):
+        if 'domain' not in proxy_conf:
+            raise excs.InvalidProxyInputError("Mechanism is set to 'sspi' , but no 'domain' key found in pillar for this proxy.")
+        if 'principal' not in proxy_conf:
+            raise excs.InvalidProxyInputError("Mechanism is set to 'sspi' , but no 'principal' key found in pillar for this proxy.")
+        for key in ('domain', 'principal'):
             DETAILS[key] = proxy_conf[key]
-
-    # Save optional
-    DETAILS["protocol"] = proxy_conf.get("protocol")
-    DETAILS["port"] = proxy_conf.get("port")
-
-    # Test connection
-    if DETAILS["mechanism"] == "userpass":
-        # Get the correct login details
-        log.debug(
-            "Retrieving credentials and testing vCenter connection for "
-            "mehchanism 'userpass'"
-        )
+    DETAILS['protocol'] = proxy_conf.get('protocol')
+    DETAILS['port'] = proxy_conf.get('port')
+    if DETAILS['mechanism'] == 'userpass':
+        log.debug("Retrieving credentials and testing vCenter connection for mehchanism 'userpass'")
         try:
-            username, password = find_credentials()
-            DETAILS["password"] = password
+            log.info('Trace')
+            (username, password) = find_credentials()
+            DETAILS['password'] = password
         except excs.SaltSystemExit as err:
-            log.critical("Error: %s", err)
+            log.critical('Error: %s', err)
             return False
     return True
-
 
 def ping():
     """
@@ -249,39 +208,25 @@ def ping():
     """
     return True
 
-
 def shutdown():
     """
     Shutdown the connection to the proxy device. For this proxy,
     shutdown is a no-op.
     """
-    log.debug("ESX vm proxy shutdown() called...")
-
+    log.debug('ESX vm proxy shutdown() called...')
 
 def find_credentials():
-    """
-    Cycle through all the possible credentials and return the first one that
-    works.
-    """
-
-    # if the username and password were already found don't go through the
-    # connection process again
-    if "username" in DETAILS and "password" in DETAILS:
-        return DETAILS["username"], DETAILS["password"]
-
-    passwords = __pillar__["proxy"]["passwords"]
+    log.info('Trace')
+    '\n    Cycle through all the possible credentials and return the first one that\n    works.\n    '
+    if 'username' in DETAILS and 'password' in DETAILS:
+        return (DETAILS['username'], DETAILS['password'])
+    passwords = __pillar__['proxy']['passwords']
     for password in passwords:
-        DETAILS["password"] = password
-        if not __salt__["vsphere.test_vcenter_connection"]():
-            # We are unable to authenticate
+        DETAILS['password'] = password
+        if not __salt__['vsphere.test_vcenter_connection']():
             continue
-        # If we have data returned from above, we've successfully authenticated.
-        return DETAILS["username"], password
-    # We've reached the end of the list without successfully authenticating.
-    raise excs.VMwareConnectionError(
-        "Cannot complete login due to incorrect credentials."
-    )
-
+        return (DETAILS['username'], password)
+    raise excs.VMwareConnectionError('Cannot complete login due to incorrect credentials.')
 
 def get_details():
     """

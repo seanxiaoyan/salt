@@ -14,70 +14,51 @@ metadata server set `metadata_server_grains: True` in the minion config.
     metadata_server_grains: True
 
 """
-
 import logging
 import os
-
 import salt.utils.data
 import salt.utils.http as http
 import salt.utils.json
 import salt.utils.stringutils
-
-# metadata server information
-HOST = "http://169.254.169.254/"
-
 log = logging.getLogger(__name__)
-
+HOST = 'http://169.254.169.254/'
 
 def __virtual__():
-    if __opts__.get("metadata_server_grains", False) is False:
+    if __opts__.get('metadata_server_grains', False) is False:
         return False
     googletest = http.query(HOST, status=True, headers=True)
-    if (
-        googletest.get("status", 404) != 200
-        or googletest.get("headers", {}).get("Metadata-Flavor", False) != "Google"
-    ):
+    if googletest.get('status', 404) != 200 or googletest.get('headers', {}).get('Metadata-Flavor', False) != 'Google':
         return False
     return True
 
-
-def _search(prefix="computeMetadata/v1/"):
-    """
-    Recursively look up all grains in the metadata server
-    """
+def _search(prefix='computeMetadata/v1/'):
+    log.info('Trace')
+    '\n    Recursively look up all grains in the metadata server\n    '
     ret = {}
-    heads = ["Metadata-Flavor: Google"]
+    heads = ['Metadata-Flavor: Google']
     linedata = http.query(os.path.join(HOST, prefix), headers=True, header_list=heads)
-    if "body" not in linedata:
+    if 'body' not in linedata:
         return ret
-    body = salt.utils.stringutils.to_unicode(linedata["body"])
-    if (
-        linedata["headers"].get("Content-Type", "text/plain")
-        == "application/octet-stream"
-    ):
+    body = salt.utils.stringutils.to_unicode(linedata['body'])
+    if linedata['headers'].get('Content-Type', 'text/plain') == 'application/octet-stream':
         return body
-    for line in body.split("\n"):
-        # Block list, null bytes are causing oddities. and project contains ssh keys used to login to the system.
-        # so keeping both from showing up in the grains.
-        if line in ["", "project/"]:
+    for line in body.split('\n'):
+        if line in ['', 'project/']:
             continue
-        if line.endswith("/"):
+        if line.endswith('/'):
             ret[line[:-1]] = _search(prefix=os.path.join(prefix, line))
         else:
-            retdata = http.query(
-                os.path.join(HOST, prefix, line), header_list=heads
-            ).get("body", None)
+            retdata = http.query(os.path.join(HOST, prefix, line), header_list=heads).get('body', None)
             if isinstance(retdata, bytes):
                 try:
-                    ret[line] = salt.utils.json.loads(
-                        salt.utils.stringutils.to_unicode(retdata)
-                    )
+                    log.info('Trace')
+                    ret[line] = salt.utils.json.loads(salt.utils.stringutils.to_unicode(retdata))
                 except ValueError:
+                    log.info('Trace')
                     ret[line] = salt.utils.stringutils.to_unicode(retdata)
             else:
                 ret[line] = retdata
     return salt.utils.data.decode(ret)
-
 
 def metadata():
     """

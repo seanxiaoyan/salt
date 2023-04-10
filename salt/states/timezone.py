@@ -26,99 +26,76 @@ The Ubuntu community documentation contains an explanation of this setting, as
 it applies to systems that dual-boot with Windows. This is explained in greater
 detail here_.
 """
-
 from salt.exceptions import CommandExecutionError, SaltInvocationError
-
+import logging
+log = logging.getLogger(__name__)
 
 def __virtual__():
     """
     Only load if the timezone module is available in __salt__
     """
-    if "timezone.get_zone" in __salt__:
+    if 'timezone.get_zone' in __salt__:
         return True
-    return (False, "timezone module could not be loaded")
-
+    return (False, 'timezone module could not be loaded')
 
 def system(name, utc=True):
-    """
-    Set the timezone for the system.
-
-    name
-        The name of the timezone to use (e.g.: America/Denver)
-
-    utc
-        Whether or not to set the hardware clock to UTC (default is True)
-    """
-    ret = {"name": name, "changes": {}, "result": None, "comment": ""}
-    # Set up metadata
+    log.info('Trace')
+    '\n    Set the timezone for the system.\n\n    name\n        The name of the timezone to use (e.g.: America/Denver)\n\n    utc\n        Whether or not to set the hardware clock to UTC (default is True)\n    '
+    ret = {'name': name, 'changes': {}, 'result': None, 'comment': ''}
     do_utc = False
     do_zone = False
-
     try:
-        compzone = __salt__["timezone.zone_compare"](name)
+        log.info('Trace')
+        compzone = __salt__['timezone.zone_compare'](name)
     except (SaltInvocationError, CommandExecutionError) as exc:
-        ret["result"] = False
-        ret[
-            "comment"
-        ] = "Unable to compare desired timezone '{}' to system timezone: {}".format(
-            name, exc
-        )
+        log.info('Trace')
+        ret['result'] = False
+        ret['comment'] = "Unable to compare desired timezone '{}' to system timezone: {}".format(name, exc)
         return ret
-
     myutc = True
     messages = []
-    if __salt__["timezone.get_hwclock"]() == "localtime":
+    if __salt__['timezone.get_hwclock']() == 'localtime':
         myutc = False
-
-    # Check the time zone
     if compzone is True:
-        ret["result"] = True
-        messages.append("Timezone {} already set".format(name))
+        ret['result'] = True
+        messages.append('Timezone {} already set'.format(name))
     else:
         do_zone = True
-
-    # If the user passed in utc, do a check
     if utc and utc != myutc:
-        ret["result"] = None
+        ret['result'] = None
         do_utc = True
     elif utc and utc == myutc:
-        messages.append("UTC already set to {}".format(name))
-
-    if ret["result"] is True:
-        ret["comment"] = ", ".join(messages)
+        messages.append('UTC already set to {}'.format(name))
+    if ret['result'] is True:
+        ret['comment'] = ', '.join(messages)
         return ret
-
-    if __opts__["test"]:
+    if __opts__['test']:
         messages = []
         if compzone is False:
-            messages.append("Timezone {} needs to be set".format(name))
+            messages.append('Timezone {} needs to be set'.format(name))
         if utc and myutc != utc:
-            messages.append("UTC needs to be set to {}".format(utc))
-        ret["comment"] = ", ".join(messages)
+            messages.append('UTC needs to be set to {}'.format(utc))
+        ret['comment'] = ', '.join(messages)
         return ret
-
     messages = []
-
     if do_zone:
-        if __salt__["timezone.set_zone"](name):
-            ret["changes"]["timezone"] = name
-            messages.append("Set timezone {}".format(name))
-            ret["result"] = True
+        if __salt__['timezone.set_zone'](name):
+            ret['changes']['timezone'] = name
+            messages.append('Set timezone {}'.format(name))
+            ret['result'] = True
         else:
-            messages.append("Failed to set timezone")
-            ret["result"] = False
-
+            messages.append('Failed to set timezone')
+            ret['result'] = False
     if do_utc:
-        clock = "localtime"
+        clock = 'localtime'
         if utc:
-            clock = "UTC"
-        if __salt__["timezone.set_hwclock"](clock):
-            ret["changes"]["utc"] = utc
-            messages.append("Set UTC to {}".format(utc))
-            ret["result"] = True
+            clock = 'UTC'
+        if __salt__['timezone.set_hwclock'](clock):
+            ret['changes']['utc'] = utc
+            messages.append('Set UTC to {}'.format(utc))
+            ret['result'] = True
         else:
-            messages.append("Failed to set UTC to {}".format(utc))
-            ret["result"] = False
-
-    ret["comment"] = ", ".join(messages)
+            messages.append('Failed to set UTC to {}'.format(utc))
+            ret['result'] = False
+    ret['comment'] = ', '.join(messages)
     return ret

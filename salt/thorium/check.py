@@ -4,13 +4,11 @@ make it easy to make states that watch registers for changes and then just
 succeed or fail based on the state of the register, this creates the pattern
 of having a command execution get gated by a check state via a requisite.
 """
-
 import logging
-
 import salt.utils.stringutils
-
+import logging
+log = logging.getLogger(__name__)
 log = logging.getLogger(__file__)
-
 
 def gt(name, value):
     """
@@ -32,15 +30,14 @@ def gt(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if __reg__[name]["val"] > value:
-        ret["result"] = True
+    if __reg__[name]['val'] > value:
+        ret['result'] = True
     return ret
-
 
 def gte(name, value):
     """
@@ -62,15 +59,14 @@ def gte(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if __reg__[name]["val"] >= value:
-        ret["result"] = True
+    if __reg__[name]['val'] >= value:
+        ret['result'] = True
     return ret
-
 
 def lt(name, value):
     """
@@ -92,15 +88,14 @@ def lt(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if __reg__[name]["val"] < value:
-        ret["result"] = True
+    if __reg__[name]['val'] < value:
+        ret['result'] = True
     return ret
-
 
 def lte(name, value):
     """
@@ -122,15 +117,14 @@ def lte(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if __reg__[name]["val"] <= value:
-        ret["result"] = True
+    if __reg__[name]['val'] <= value:
+        ret['result'] = True
     return ret
-
 
 def eq(name, value):
     """
@@ -152,15 +146,14 @@ def eq(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if __reg__[name]["val"] == value:
-        ret["result"] = True
+    if __reg__[name]['val'] == value:
+        ret['result'] = True
     return ret
-
 
 def ne(name, value):
     """
@@ -182,77 +175,49 @@ def ne(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if __reg__[name]["val"] != value:
-        ret["result"] = True
+    if __reg__[name]['val'] != value:
+        ret['result'] = True
     return ret
 
-
-def contains(
-    name,
-    value,
-    count_lt=None,
-    count_lte=None,
-    count_eq=None,
-    count_gte=None,
-    count_gt=None,
-    count_ne=None,
-):
-    """
-    Only succeed if the value in the given register location contains
-    the given value
-
-    USAGE:
-
-    .. code-block:: yaml
-
-        foo:
-          check.contains:
-            - value: itni
-
-        run_remote_ex:
-          local.cmd:
-            - tgt: '*'
-            - func: test.ping
-            - require:
-              - check: foo
-    """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+def contains(name, value, count_lt=None, count_lte=None, count_eq=None, count_gte=None, count_gt=None, count_ne=None):
+    log.info('Trace')
+    "\n    Only succeed if the value in the given register location contains\n    the given value\n\n    USAGE:\n\n    .. code-block:: yaml\n\n        foo:\n          check.contains:\n            - value: itni\n\n        run_remote_ex:\n          local.cmd:\n            - tgt: '*'\n            - func: test.ping\n            - require:\n              - check: foo\n    "
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
     try:
-        count_compare = (
-            count_lt or count_lte or count_eq or count_gte or count_gt or count_ne
-        )
+        count_compare = count_lt or count_lte or count_eq or count_gte or count_gt or count_ne
         if count_compare:
-            occurrences = __reg__[name]["val"].count(value)
-            log.debug("%s appears %s times", value, occurrences)
-            ret["result"] = True
+            log.info('Trace')
+            occurrences = __reg__[name]['val'].count(value)
+            log.debug('%s appears %s times', value, occurrences)
+            ret['result'] = True
             if count_lt:
-                ret["result"] &= occurrences < count_lt
+                ret['result'] &= occurrences < count_lt
             if count_lte:
-                ret["result"] &= occurrences <= count_lte
+                ret['result'] &= occurrences <= count_lte
             if count_eq:
-                ret["result"] &= occurrences == count_eq
+                ret['result'] &= occurrences == count_eq
             if count_gte:
-                ret["result"] &= occurrences >= count_gte
+                ret['result'] &= occurrences >= count_gte
             if count_gt:
-                ret["result"] &= occurrences > count_gt
+                ret['result'] &= occurrences > count_gt
             if count_ne:
-                ret["result"] &= occurrences != count_ne
-        else:
-            if value in __reg__[name]["val"]:
-                ret["result"] = True
+                log.info('Trace')
+                ret['result'] &= occurrences != count_ne
+        elif value in __reg__[name]['val']:
+            ret['result'] = True
     except TypeError:
+        log.info('Trace')
         pass
     return ret
-
 
 def event(name):
     """
@@ -273,14 +238,11 @@ def event(name):
             - require:
               - check: salt/foo/*/bar
     """
-    ret = {"name": name, "changes": {}, "comment": "", "result": False}
-
+    ret = {'name': name, 'changes': {}, 'comment': '', 'result': False}
     for event in __events__:
-        if salt.utils.stringutils.expr_match(event["tag"], name):
-            ret["result"] = True
-
+        if salt.utils.stringutils.expr_match(event['tag'], name):
+            ret['result'] = True
     return ret
-
 
 def len_gt(name, value):
     """
@@ -302,15 +264,14 @@ def len_gt(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if len(__reg__[name]["val"]) > value:
-        ret["result"] = True
+    if len(__reg__[name]['val']) > value:
+        ret['result'] = True
     return ret
-
 
 def len_gte(name, value):
     """
@@ -332,15 +293,14 @@ def len_gte(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if len(__reg__[name]["val"]) >= value:
-        ret["result"] = True
+    if len(__reg__[name]['val']) >= value:
+        ret['result'] = True
     return ret
-
 
 def len_lt(name, value):
     """
@@ -362,15 +322,14 @@ def len_lt(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if len(__reg__[name]["val"]) < value:
-        ret["result"] = True
+    if len(__reg__[name]['val']) < value:
+        ret['result'] = True
     return ret
-
 
 def len_lte(name, value):
     """
@@ -392,15 +351,14 @@ def len_lte(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if len(__reg__[name]["val"]) <= value:
-        ret["result"] = True
+    if len(__reg__[name]['val']) <= value:
+        ret['result'] = True
     return ret
-
 
 def len_eq(name, value):
     """
@@ -422,15 +380,14 @@ def len_eq(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if __reg__[name]["val"] == value:
-        ret["result"] = True
+    if __reg__[name]['val'] == value:
+        ret['result'] = True
     return ret
-
 
 def len_ne(name, value):
     """
@@ -452,11 +409,11 @@ def len_ne(name, value):
             - require:
               - check: foo
     """
-    ret = {"name": name, "result": False, "comment": "", "changes": {}}
+    ret = {'name': name, 'result': False, 'comment': '', 'changes': {}}
     if name not in __reg__:
-        ret["result"] = False
-        ret["comment"] = "Value {} not in register".format(name)
+        ret['result'] = False
+        ret['comment'] = 'Value {} not in register'.format(name)
         return ret
-    if len(__reg__[name]["val"]) != value:
-        ret["result"] = True
+    if len(__reg__[name]['val']) != value:
+        ret['result'] = True
     return ret

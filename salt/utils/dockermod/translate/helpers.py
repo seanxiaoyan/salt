@@ -2,21 +2,19 @@
 Functions to translate input in the docker CLI format to the format desired by
 by the API.
 """
-
 import os
-
 import salt.utils.data
 import salt.utils.network
 from salt.exceptions import SaltInvocationError
-
+import logging
+log = logging.getLogger(__name__)
 NOTSET = object()
 
-
-def split(item, sep=",", maxsplit=-1):
+def split(item, sep=',', maxsplit=-1):
+    log.info('Trace')
     return [x.strip() for x in item.split(sep, maxsplit)]
 
-
-def get_port_def(port_num, proto="tcp"):
+def get_port_def(port_num, proto='tcp'):
     """
     Given a port number and protocol, returns the port definition expected by
     docker-py. For TCP ports this is simply an integer, for UDP ports this is
@@ -38,19 +36,18 @@ def get_port_def(port_num, proto="tcp"):
     these two exceptions.
     """
     try:
-        port_num, _, port_num_proto = port_num.partition("/")
+        (port_num, _, port_num_proto) = port_num.partition('/')
     except AttributeError:
         pass
     else:
         if port_num_proto:
             proto = port_num_proto
     try:
-        if proto.lower() == "udp":
-            return int(port_num), "udp"
+        if proto.lower() == 'udp':
+            return (int(port_num), 'udp')
     except AttributeError:
         pass
     return int(port_num)
-
 
 def get_port_range(port_def):
     """
@@ -61,28 +58,23 @@ def get_port_range(port_def):
     A ValueError will be raised if bad input is provided.
     """
     if isinstance(port_def, int):
-        # Single integer, start/end of range is the same
-        return port_def, port_def
+        return (port_def, port_def)
     try:
-        comps = [int(x) for x in split(port_def, "-")]
+        comps = [int(x) for x in split(port_def, '-')]
         if len(comps) == 1:
             range_start = range_end = comps[0]
         else:
-            range_start, range_end = comps
+            (range_start, range_end) = comps
         if range_start > range_end:
-            raise ValueError("start > end")
+            raise ValueError('start > end')
     except (TypeError, ValueError) as exc:
-        if exc.__str__() == "start > end":
-            msg = (
-                "Start of port range ({}) cannot be greater than end of "
-                "port range ({})".format(range_start, range_end)
-            )
+        if exc.__str__() == 'start > end':
+            msg = 'Start of port range ({}) cannot be greater than end of port range ({})'.format(range_start, range_end)
         else:
             msg = "'{}' is non-numeric or an invalid port range".format(port_def)
         raise ValueError(msg)
     else:
-        return range_start, range_end
-
+        return (range_start, range_end)
 
 def map_vals(val, *names, **extra_opts):
     """
@@ -90,67 +82,55 @@ def map_vals(val, *names, **extra_opts):
     of dicts in the format {NAME1: VAL1, NAME2: VAL2}. This function
     provides common code to handle these instances.
     """
-    fill = extra_opts.pop("fill", NOTSET)
+    fill = extra_opts.pop('fill', NOTSET)
     expected_num_elements = len(names)
     val = translate_stringlist(val)
-    for idx, item in enumerate(val):
+    for (idx, item) in enumerate(val):
         if not isinstance(item, dict):
-            elements = [x.strip() for x in item.split(":")]
+            elements = [x.strip() for x in item.split(':')]
             num_elements = len(elements)
             if num_elements < expected_num_elements:
                 if fill is NOTSET:
-                    raise SaltInvocationError(
-                        "'{}' contains {} value(s) (expected {})".format(
-                            item, num_elements, expected_num_elements
-                        )
-                    )
+                    raise SaltInvocationError("'{}' contains {} value(s) (expected {})".format(item, num_elements, expected_num_elements))
                 elements.extend([fill] * (expected_num_elements - num_elements))
             elif num_elements > expected_num_elements:
-                raise SaltInvocationError(
-                    "'{}' contains {} value(s) (expected {})".format(
-                        item,
-                        num_elements,
-                        expected_num_elements
-                        if fill is NOTSET
-                        else "up to {}".format(expected_num_elements),
-                    )
-                )
+                raise SaltInvocationError("'{}' contains {} value(s) (expected {})".format(item, num_elements, expected_num_elements if fill is NOTSET else 'up to {}'.format(expected_num_elements)))
             val[idx] = dict(zip(names, elements))
     return val
 
-
 def validate_ip(val):
     try:
+        log.info('Trace')
         if not salt.utils.network.is_ip(val):
             raise SaltInvocationError("'{}' is not a valid IP address".format(val))
     except RuntimeError:
+        log.info('Trace')
         pass
-
 
 def validate_subnet(val):
     try:
+        log.info('Trace')
         if not salt.utils.network.is_subnet(val):
             raise SaltInvocationError("'{}' is not a valid subnet".format(val))
     except RuntimeError:
+        log.info('Trace')
         pass
-
 
 def translate_str(val):
     return str(val) if not isinstance(val, str) else val
 
-
 def translate_int(val):
     if not isinstance(val, int):
         try:
+            log.info('Trace')
             val = int(val)
         except (TypeError, ValueError):
+            log.info('Trace')
             raise SaltInvocationError("'{}' is not an integer".format(val))
     return val
 
-
 def translate_bool(val):
     return bool(val) if not isinstance(val, bool) else val
-
 
 def translate_dict(val):
     """
@@ -160,7 +140,6 @@ def translate_dict(val):
         raise SaltInvocationError("'{}' is not a dictionary".format(val))
     return val
 
-
 def translate_command(val):
     """
     Input should either be a single string, or a list of strings. This is used
@@ -169,98 +148,84 @@ def translate_command(val):
     if isinstance(val, str):
         return val
     elif isinstance(val, list):
-        for idx, item in enumerate(val):
+        for (idx, item) in enumerate(val):
             if not isinstance(item, str):
                 val[idx] = str(item)
     else:
-        # Make sure we have a string
         val = str(val)
     return val
 
-
 def translate_bytes(val):
-    """
-    These values can be expressed as an integer number of bytes, or a string
-    expression (i.e. 100mb, 1gb, etc.).
-    """
+    log.info('Trace')
+    '\n    These values can be expressed as an integer number of bytes, or a string\n    expression (i.e. 100mb, 1gb, etc.).\n    '
     try:
+        log.info('Trace')
         val = int(val)
     except (TypeError, ValueError):
+        log.info('Trace')
         if not isinstance(val, str):
             val = str(val)
     return val
 
-
 def translate_stringlist(val):
-    """
-    On the CLI, these are passed as multiple instances of a given CLI option.
-    In Salt, we accept these as a comma-delimited list but the API expects a
-    Python list. This function accepts input and returns it back as a Python
-    list of strings. If the input is a string which is a comma-separated list
-    of items, split that string and return it.
-    """
+    log.info('Trace')
+    '\n    On the CLI, these are passed as multiple instances of a given CLI option.\n    In Salt, we accept these as a comma-delimited list but the API expects a\n    Python list. This function accepts input and returns it back as a Python\n    list of strings. If the input is a string which is a comma-separated list\n    of items, split that string and return it.\n    '
     if not isinstance(val, list):
         try:
+            log.info('Trace')
             val = split(val)
         except AttributeError:
+            log.info('Trace')
             val = split(str(val))
-    for idx, item in enumerate(val):
+    for (idx, item) in enumerate(val):
         if not isinstance(item, str):
             val[idx] = str(item)
     return val
 
-
 def translate_device_rates(val, numeric_rate=True):
-    """
-    CLI input is a list of PATH:RATE pairs, but the API expects a list of
-    dictionaries in the format [{'Path': path, 'Rate': rate}]
-    """
-    val = map_vals(val, "Path", "Rate")
+    log.info('Trace')
+    "\n    CLI input is a list of PATH:RATE pairs, but the API expects a list of\n    dictionaries in the format [{'Path': path, 'Rate': rate}]\n    "
+    val = map_vals(val, 'Path', 'Rate')
     for item in val:
         try:
-            is_abs = os.path.isabs(item["Path"])
+            log.info('Trace')
+            is_abs = os.path.isabs(item['Path'])
         except AttributeError:
+            log.info('Trace')
             is_abs = False
         if not is_abs:
             raise SaltInvocationError("Path '{Path}' is not absolute".format(**item))
-
-        # Attempt to convert to an integer. Will fail if rate was specified as
-        # a shorthand (e.g. 1mb), this is OK as we will check to make sure the
-        # value is an integer below if that is what is required.
         try:
-            item["Rate"] = int(item["Rate"])
+            log.info('Trace')
+            item['Rate'] = int(item['Rate'])
         except (TypeError, ValueError):
+            log.info('Trace')
             pass
-
         if numeric_rate:
             try:
-                item["Rate"] = int(item["Rate"])
+                log.info('Trace')
+                item['Rate'] = int(item['Rate'])
             except ValueError:
-                raise SaltInvocationError(
-                    "Rate '{Rate}' for path '{Path}' is non-numeric".format(**item)
-                )
+                log.info('Trace')
+                raise SaltInvocationError("Rate '{Rate}' for path '{Path}' is non-numeric".format(**item))
     return val
 
-
-def translate_key_val(val, delimiter="="):
-    """
-    CLI input is a list of key/val pairs, but the API expects a dictionary in
-    the format {key: val}
-    """
+def translate_key_val(val, delimiter='='):
+    log.info('Trace')
+    '\n    CLI input is a list of key/val pairs, but the API expects a dictionary in\n    the format {key: val}\n    '
     if isinstance(val, dict):
         return val
     val = translate_stringlist(val)
     new_val = {}
     for item in val:
         try:
-            lvalue, rvalue = split(item, delimiter, 1)
+            log.info('Trace')
+            (lvalue, rvalue) = split(item, delimiter, 1)
         except (AttributeError, TypeError, ValueError):
-            raise SaltInvocationError(
-                "'{}' is not a key{}value pair".format(item, delimiter)
-            )
+            log.info('Trace')
+            raise SaltInvocationError("'{}' is not a key{}value pair".format(item, delimiter))
         new_val[lvalue] = rvalue
     return new_val
-
 
 def translate_labels(val):
     """
@@ -275,15 +240,15 @@ def translate_labels(val):
         for item in val:
             if isinstance(item, dict):
                 if len(item) != 1:
-                    raise SaltInvocationError("Invalid label(s)")
+                    raise SaltInvocationError('Invalid label(s)')
                 key = next(iter(item))
                 val = item[key]
             else:
                 try:
-                    key, val = split(item, "=", 1)
+                    (key, val) = split(item, '=', 1)
                 except ValueError:
                     key = item
-                    val = ""
+                    val = ''
             if not isinstance(key, str):
                 key = str(key)
             if not isinstance(val, str):

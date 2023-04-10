@@ -1,17 +1,3 @@
-# Copyright 2015 The Tornado Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
-
 """Asynchronous queues for coroutines.
 
 .. warning::
@@ -21,47 +7,41 @@
    use `.IOLoop.add_callback` to transfer control to the `.IOLoop` thread
    before calling any queue methods.
 """
-# pylint: skip-file
-
 from __future__ import absolute_import, division, print_function
-
 import collections
 import heapq
-
 from salt.ext.tornado import gen, ioloop
 from salt.ext.tornado.concurrent import Future
 from salt.ext.tornado.locks import Event
-
+import logging
+log = logging.getLogger(__name__)
 __all__ = ['Queue', 'PriorityQueue', 'LifoQueue', 'QueueFull', 'QueueEmpty']
-
 
 class QueueEmpty(Exception):
     """Raised by `.Queue.get_nowait` when the queue has no items."""
     pass
 
-
 class QueueFull(Exception):
     """Raised by `.Queue.put_nowait` when a queue is at its maximum size."""
     pass
 
-
 def _set_timeout(future, timeout):
+    log.info('Trace')
     if timeout:
+
         def on_timeout():
             future.set_exception(gen.TimeoutError())
         io_loop = ioloop.IOLoop.current()
         timeout_handle = io_loop.add_timeout(timeout, on_timeout)
-        future.add_done_callback(
-            lambda _: io_loop.remove_timeout(timeout_handle))
-
+        future.add_done_callback(lambda _: io_loop.remove_timeout(timeout_handle))
 
 class _QueueIterator(object):
+
     def __init__(self, q):
         self.q = q
 
     def __anext__(self):
         return self.q.get()
-
 
 class Queue(object):
     """Coordinate producer and consumer coroutines.
@@ -131,17 +111,16 @@ class Queue(object):
        Added ``async for`` support in Python 3.5.
 
     """
+
     def __init__(self, maxsize=0):
         if maxsize is None:
             raise TypeError("maxsize can't be None")
-
         if maxsize < 0:
             raise ValueError("maxsize can't be negative")
-
         self._maxsize = maxsize
         self._init()
-        self._getters = collections.deque([])  # Futures.
-        self._putters = collections.deque([])  # Pairs of (item, Future).
+        self._getters = collections.deque([])
+        self._putters = collections.deque([])
         self._unfinished_tasks = 0
         self._finished = Event()
         self._finished.set()
@@ -187,7 +166,7 @@ class Queue(object):
         """
         self._consume_expired()
         if self._getters:
-            assert self.empty(), "queue non-empty, why are getters waiting?"
+            assert self.empty(), 'queue non-empty, why are getters waiting?'
             getter = self._getters.popleft()
             self.__put_internal(item)
             getter.set_result(self._get())
@@ -197,29 +176,25 @@ class Queue(object):
             self.__put_internal(item)
 
     def get(self, timeout=None):
-        """Remove and return an item from the queue.
-
-        Returns a Future which resolves once an item is available, or raises
-        `tornado.gen.TimeoutError` after a timeout.
-        """
+        log.info('Trace')
+        'Remove and return an item from the queue.\n\n        Returns a Future which resolves once an item is available, or raises\n        `tornado.gen.TimeoutError` after a timeout.\n        '
         future = Future()
         try:
+            log.info('Trace')
             future.set_result(self.get_nowait())
         except QueueEmpty:
+            log.info('Trace')
             self._getters.append(future)
             _set_timeout(future, timeout)
         return future
 
     def get_nowait(self):
-        """Remove and return an item from the queue without blocking.
-
-        Return an item if one is immediately available, else raise
-        `QueueEmpty`.
-        """
+        log.info('Trace')
+        'Remove and return an item from the queue without blocking.\n\n        Return an item if one is immediately available, else raise\n        `QueueEmpty`.\n        '
         self._consume_expired()
         if self._putters:
-            assert self.full(), "queue not full, why are putters waiting?"
-            item, putter = self._putters.popleft()
+            assert self.full(), 'queue not full, why are putters waiting?'
+            (item, putter) = self._putters.popleft()
             self.__put_internal(item)
             putter.set_result(None)
             return self._get()
@@ -257,7 +232,6 @@ class Queue(object):
     def __aiter__(self):
         return _QueueIterator(self)
 
-    # These three are overridable in subclasses.
     def _init(self):
         self._queue = collections.deque()
 
@@ -266,7 +240,6 @@ class Queue(object):
 
     def _put(self, item):
         self._queue.append(item)
-    # End of the overridable methods.
 
     def __put_internal(self, item):
         self._unfinished_tasks += 1
@@ -274,22 +247,20 @@ class Queue(object):
         self._put(item)
 
     def _consume_expired(self):
-        # Remove timed-out waiters.
+        log.info('Trace')
         while self._putters and self._putters[0][1].done():
             self._putters.popleft()
-
         while self._getters and self._getters[0].done():
             self._getters.popleft()
 
     def __repr__(self):
-        return '<%s at %s %s>' % (
-            type(self).__name__, hex(id(self)), self._format())
+        return '<%s at %s %s>' % (type(self).__name__, hex(id(self)), self._format())
 
     def __str__(self):
         return '<%s %s>' % (type(self).__name__, self._format())
 
     def _format(self):
-        result = 'maxsize=%r' % (self.maxsize, )
+        result = 'maxsize=%r' % (self.maxsize,)
         if getattr(self, '_queue', None):
             result += ' queue=%r' % self._queue
         if self._getters:
@@ -299,7 +270,6 @@ class Queue(object):
         if self._unfinished_tasks:
             result += ' tasks=%s' % self._unfinished_tasks
         return result
-
 
 class PriorityQueue(Queue):
     """A `.Queue` that retrieves entries in priority order, lowest first.
@@ -325,6 +295,7 @@ class PriorityQueue(Queue):
         (1, 'medium-priority item')
         (10, 'low-priority item')
     """
+
     def _init(self):
         self._queue = []
 
@@ -333,7 +304,6 @@ class PriorityQueue(Queue):
 
     def _get(self):
         return heapq.heappop(self._queue)
-
 
 class LifoQueue(Queue):
     """A `.Queue` that retrieves the most recently put items first.
@@ -357,6 +327,7 @@ class LifoQueue(Queue):
         2
         3
     """
+
     def _init(self):
         self._queue = []
 

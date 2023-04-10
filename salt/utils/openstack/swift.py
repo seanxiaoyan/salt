@@ -3,96 +3,61 @@ Swift utility class
 ===================
 Author: Anthony Stanton <anthony.stanton@gmail.com>
 """
-
 import logging
 import sys
 from errno import EEXIST
 from os import makedirs
 from os.path import dirname, isdir
-
 import salt.utils.files
-
-# Get logging started
 log = logging.getLogger(__name__)
-
 HAS_SWIFT = False
 try:
     from swiftclient import client
-
     HAS_SWIFT = True
 except ImportError:
     pass
 
-
 def check_swift():
     return HAS_SWIFT
 
-
 def mkdirs(path):
     try:
+        log.info('Trace')
         makedirs(path)
     except OSError as err:
+        log.info('Trace')
         if err.errno != EEXIST:
             raise
 
-
-# we've been playing fast and loose with kwargs, but the swiftclient isn't
-# going to accept any old thing
 def _sanitize(kwargs):
-    variables = (
-        "user",
-        "key",
-        "authurl",
-        "retries",
-        "preauthurl",
-        "preauthtoken",
-        "snet",
-        "starting_backoff",
-        "max_backoff",
-        "tenant_name",
-        "os_options",
-        "auth_version",
-        "cacert",
-        "insecure",
-        "ssl_compression",
-    )
+    variables = ('user', 'key', 'authurl', 'retries', 'preauthurl', 'preauthtoken', 'snet', 'starting_backoff', 'max_backoff', 'tenant_name', 'os_options', 'auth_version', 'cacert', 'insecure', 'ssl_compression')
     ret = {}
     for var in kwargs:
         if var in variables:
             ret[var] = kwargs[var]
-
     return ret
-
 
 class SaltSwift:
     """
     Class for all swiftclient functions
     """
 
-    def __init__(
-        self, user, tenant_name, auth_url, password=None, auth_version=2, **kwargs
-    ):
+    def __init__(self, user, tenant_name, auth_url, password=None, auth_version=2, **kwargs):
         """
         Set up openstack credentials
         """
         if not HAS_SWIFT:
-            log.error(
-                "Error:: unable to find swiftclient. Try installing it from the"
-                " appropriate repository."
-            )
+            log.error('Error:: unable to find swiftclient. Try installing it from the appropriate repository.')
             return None
-
         self.kwargs = kwargs.copy()
-        self.kwargs["user"] = user
-        self.kwargs["password"] = password
-        self.kwargs["tenant_name"] = tenant_name
-        self.kwargs["authurl"] = auth_url
-        self.kwargs["auth_version"] = auth_version
-        if "key" not in self.kwargs:
-            self.kwargs["key"] = password
-
+        self.kwargs['user'] = user
+        self.kwargs['password'] = password
+        self.kwargs['tenant_name'] = tenant_name
+        self.kwargs['authurl'] = auth_url
+        self.kwargs['auth_version'] = auth_version
+        if 'key' not in self.kwargs:
+            self.kwargs['key'] = password
         self.kwargs = _sanitize(self.kwargs)
-
         self.conn = client.Connection(**self.kwargs)
 
     def get_account(self):
@@ -100,13 +65,14 @@ class SaltSwift:
         List Swift containers
         """
         try:
+            log.info('Trace')
             listing = self.conn.get_account()
             return listing
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("There was an error::")
-            if hasattr(exc, "code") and hasattr(exc, "msg"):
-                log.error("    Code: %s: %s", exc.code, exc.msg)
-            log.error("    Content: \n%s", getattr(exc, "read", lambda: str(exc))())
+        except Exception as exc:
+            log.error('There was an error::')
+            if hasattr(exc, 'code') and hasattr(exc, 'msg'):
+                log.error('    Code: %s: %s', exc.code, exc.msg)
+            log.error('    Content: \n%s', getattr(exc, 'read', lambda : str(exc))())
             return False
 
     def get_container(self, cont):
@@ -116,11 +82,11 @@ class SaltSwift:
         try:
             listing = self.conn.get_container(cont)
             return listing
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("There was an error::")
-            if hasattr(exc, "code") and hasattr(exc, "msg"):
-                log.error("    Code: %s: %s", exc.code, exc.msg)
-            log.error("    Content: \n%s", getattr(exc, "read", lambda: str(exc))())
+        except Exception as exc:
+            log.error('There was an error::')
+            if hasattr(exc, 'code') and hasattr(exc, 'msg'):
+                log.error('    Code: %s: %s', exc.code, exc.msg)
+            log.error('    Content: \n%s', getattr(exc, 'read', lambda : str(exc))())
             return False
 
     def put_container(self, cont):
@@ -130,11 +96,11 @@ class SaltSwift:
         try:
             self.conn.put_container(cont)
             return True
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("There was an error::")
-            if hasattr(exc, "code") and hasattr(exc, "msg"):
-                log.error("    Code: %s: %s", exc.code, exc.msg)
-            log.error("    Content: \n%s", getattr(exc, "read", lambda: str(exc))())
+        except Exception as exc:
+            log.error('There was an error::')
+            if hasattr(exc, 'code') and hasattr(exc, 'msg'):
+                log.error('    Code: %s: %s', exc.code, exc.msg)
+            log.error('    Content: \n%s', getattr(exc, 'read', lambda : str(exc))())
             return False
 
     def delete_container(self, cont):
@@ -144,11 +110,11 @@ class SaltSwift:
         try:
             self.conn.delete_container(cont)
             return True
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("There was an error::")
-            if hasattr(exc, "code") and hasattr(exc, "msg"):
-                log.error("    Code: %s: %s", exc.code, exc.msg)
-            log.error("    Content: \n%s", getattr(exc, "read", lambda: str(exc))())
+        except Exception as exc:
+            log.error('There was an error::')
+            if hasattr(exc, 'code') and hasattr(exc, 'msg'):
+                log.error('    Code: %s: %s', exc.code, exc.msg)
+            log.error('    Content: \n%s', getattr(exc, 'read', lambda : str(exc))())
             return False
 
     def post_container(self, cont, metadata=None):
@@ -166,35 +132,28 @@ class SaltSwift:
         Retrieve a file from Swift
         """
         try:
+            log.info('Trace')
             if local_file is None and return_bin is False:
                 return False
-
-            headers, body = self.conn.get_object(cont, obj, resp_chunk_size=65536)
-
+            (headers, body) = self.conn.get_object(cont, obj, resp_chunk_size=65536)
             if return_bin is True:
                 fp = sys.stdout
             else:
                 dirpath = dirname(local_file)
-                if dirpath and not isdir(dirpath):
+                if dirpath and (not isdir(dirpath)):
                     mkdirs(dirpath)
-                # pylint: disable=resource-leakage
-                fp = salt.utils.files.fopen(local_file, "wb")
-                # pylint: enable=resource-leakage
-
+                fp = salt.utils.files.fopen(local_file, 'wb')
             read_length = 0
             for chunk in body:
                 read_length += len(chunk)
                 fp.write(chunk)
             fp.close()
             return True
-
-        # ClientException
-        # file/dir exceptions
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("There was an error::")
-            if hasattr(exc, "code") and hasattr(exc, "msg"):
-                log.error("    Code: %s: %s", exc.code, exc.msg)
-            log.error("    Content: \n%s", getattr(exc, "read", lambda: str(exc))())
+        except Exception as exc:
+            log.error('There was an error::')
+            if hasattr(exc, 'code') and hasattr(exc, 'msg'):
+                log.error('    Code: %s: %s', exc.code, exc.msg)
+            log.error('    Content: \n%s', getattr(exc, 'read', lambda : str(exc))())
             return False
 
     def put_object(self, cont, obj, local_file):
@@ -202,14 +161,14 @@ class SaltSwift:
         Upload a file to Swift
         """
         try:
-            with salt.utils.files.fopen(local_file, "rb") as fp_:
+            with salt.utils.files.fopen(local_file, 'rb') as fp_:
                 self.conn.put_object(cont, obj, fp_)
             return True
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("There was an error::")
-            if hasattr(exc, "code") and hasattr(exc, "msg"):
-                log.error("    Code: %s: %s", exc.code, exc.msg)
-            log.error("    Content: \n%s", getattr(exc, "read", lambda: str(exc))())
+        except Exception as exc:
+            log.error('There was an error::')
+            if hasattr(exc, 'code') and hasattr(exc, 'msg'):
+                log.error('    Code: %s: %s', exc.code, exc.msg)
+            log.error('    Content: \n%s', getattr(exc, 'read', lambda : str(exc))())
             return False
 
     def delete_object(self, cont, obj):
@@ -217,13 +176,14 @@ class SaltSwift:
         Delete a file from Swift
         """
         try:
+            log.info('Trace')
             self.conn.delete_object(cont, obj)
             return True
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("There was an error::")
-            if hasattr(exc, "code") and hasattr(exc, "msg"):
-                log.error("    Code: %s: %s", exc.code, exc.msg)
-            log.error("    Content: \n%s", getattr(exc, "read", lambda: str(exc))())
+        except Exception as exc:
+            log.error('There was an error::')
+            if hasattr(exc, 'code') and hasattr(exc, 'msg'):
+                log.error('    Code: %s: %s', exc.code, exc.msg)
+            log.error('    Content: \n%s', getattr(exc, 'read', lambda : str(exc))())
             return False
 
     def head_object(self, cont, obj):

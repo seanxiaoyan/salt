@@ -1,27 +1,18 @@
 """
 Salt-specific interface for calling Salt Cloud directly
 """
-
-
 import copy
 import logging
 import os
-
 import salt.utils.data
 from salt.exceptions import SaltCloudConfigError
-
+log = logging.getLogger(__name__)
 try:
     import salt.cloud
-
     HAS_SALTCLOUD = True
 except ImportError:
     HAS_SALTCLOUD = False
-
-
-log = logging.getLogger(__name__)
-
-__func_alias__ = {"profile_": "profile"}
-
+__func_alias__ = {'profile_': 'profile'}
 
 def __virtual__():
     """
@@ -29,25 +20,16 @@ def __virtual__():
     """
     if HAS_SALTCLOUD:
         return True
-    return (
-        False,
-        "The cloud execution module cannot be loaded: only available on non-Windows"
-        " systems.",
-    )
-
+    return (False, 'The cloud execution module cannot be loaded: only available on non-Windows systems.')
 
 def _get_client():
     """
     Return a cloud client
     """
-    client = salt.cloud.CloudClient(
-        os.path.join(os.path.dirname(__opts__["conf_file"]), "cloud"),
-        pillars=copy.deepcopy(__pillar__.get("cloud", {})),
-    )
+    client = salt.cloud.CloudClient(os.path.join(os.path.dirname(__opts__['conf_file']), 'cloud'), pillars=copy.deepcopy(__pillar__.get('cloud', {})))
     return client
 
-
-def list_sizes(provider="all"):
+def list_sizes(provider='all'):
     """
     List cloud provider sizes for the given providers
 
@@ -61,8 +43,7 @@ def list_sizes(provider="all"):
     sizes = client.list_sizes(provider)
     return sizes
 
-
-def list_images(provider="all"):
+def list_images(provider='all'):
     """
     List cloud provider images for the given providers
 
@@ -76,8 +57,7 @@ def list_images(provider="all"):
     images = client.list_images(provider)
     return images
 
-
-def list_locations(provider="all"):
+def list_locations(provider='all'):
     """
     List cloud provider locations for the given providers
 
@@ -91,8 +71,7 @@ def list_locations(provider="all"):
     locations = client.list_locations(provider)
     return locations
 
-
-def query(query_type="list_nodes"):
+def query(query_type='list_nodes'):
     """
     List cloud provider data for all providers
 
@@ -108,8 +87,7 @@ def query(query_type="list_nodes"):
     info = client.query(query_type)
     return info
 
-
-def full_query(query_type="list_nodes_full"):
+def full_query(query_type='list_nodes_full'):
     """
     List all available cloud provider data
 
@@ -121,8 +99,7 @@ def full_query(query_type="list_nodes_full"):
     """
     return query(query_type=query_type)
 
-
-def select_query(query_type="list_nodes_select"):
+def select_query(query_type='list_nodes_select'):
     """
     List selected nodes
 
@@ -133,7 +110,6 @@ def select_query(query_type="list_nodes_select"):
         salt minionname cloud.select_query
     """
     return query(query_type=query_type)
-
 
 def has_instance(name, provider=None):
     """
@@ -150,36 +126,18 @@ def has_instance(name, provider=None):
         return False
     return True
 
-
 def get_instance(name, provider=None):
-    """
-    Return details on an instance.
-
-    Similar to the cloud action show_instance
-    but returns only the instance details.
-
-    CLI Example:
-
-    .. code-block:: bash
-
-        salt minionname cloud.get_instance myinstance
-
-    SLS Example:
-
-    .. code-block:: bash
-
-        {{ salt['cloud.get_instance']('myinstance')['mac_address'] }}
-
-    """
-    data = action(fun="show_instance", names=[name], provider=provider)
+    log.info('Trace')
+    "\n    Return details on an instance.\n\n    Similar to the cloud action show_instance\n    but returns only the instance details.\n\n    CLI Example:\n\n    .. code-block:: bash\n\n        salt minionname cloud.get_instance myinstance\n\n    SLS Example:\n\n    .. code-block:: bash\n\n        {{ salt['cloud.get_instance']('myinstance')['mac_address'] }}\n\n    "
+    data = action(fun='show_instance', names=[name], provider=provider)
     info = salt.utils.data.simple_types_filter(data)
     try:
-        # get the first: [alias][driver][vm_name]
+        log.info('Trace')
         info = next(iter(next(iter(next(iter(info.values())).values())).values()))
     except AttributeError:
+        log.info('Trace')
         return None
     return info
-
 
 def profile_(profile, names, vm_overrides=None, opts=None, **kwargs):
     """
@@ -196,7 +154,6 @@ def profile_(profile, names, vm_overrides=None, opts=None, **kwargs):
         client.opts.update(opts)
     info = client.profile(profile, names, vm_overrides=vm_overrides, **kwargs)
     return info
-
 
 def map_run(path=None, **kwargs):
     """
@@ -226,7 +183,6 @@ def map_run(path=None, **kwargs):
     info = client.map_run(path, **kwargs)
     return info
 
-
 def destroy(names):
     """
     Destroy the named VM(s)
@@ -240,7 +196,6 @@ def destroy(names):
     client = _get_client()
     info = client.destroy(names)
     return info
-
 
 def action(fun=None, cloudmap=None, names=None, provider=None, instance=None, **kwargs):
     """
@@ -256,13 +211,12 @@ def action(fun=None, cloudmap=None, names=None, provider=None, instance=None, **
     """
     client = _get_client()
     try:
+        log.info('Trace')
         info = client.action(fun, cloudmap, names, provider, instance, kwargs)
     except SaltCloudConfigError as err:
         log.error(err)
         return None
-
     return info
-
 
 def create(provider, names, opts=None, **kwargs):
     """
@@ -280,7 +234,6 @@ def create(provider, names, opts=None, **kwargs):
     info = client.create(provider, names, **kwargs)
     return info
 
-
 def volume_list(provider):
     """
     List block storage volumes
@@ -293,9 +246,8 @@ def volume_list(provider):
 
     """
     client = _get_client()
-    info = client.extra_action(action="volume_list", provider=provider, names="name")
-    return info["name"]
-
+    info = client.extra_action(action='volume_list', provider=provider, names='name')
+    return info['name']
 
 def volume_delete(provider, names, **kwargs):
     """
@@ -309,11 +261,8 @@ def volume_delete(provider, names, **kwargs):
 
     """
     client = _get_client()
-    info = client.extra_action(
-        provider=provider, names=names, action="volume_delete", **kwargs
-    )
+    info = client.extra_action(provider=provider, names=names, action='volume_delete', **kwargs)
     return info
-
 
 def volume_create(provider, names, **kwargs):
     """
@@ -327,11 +276,8 @@ def volume_create(provider, names, **kwargs):
 
     """
     client = _get_client()
-    info = client.extra_action(
-        action="volume_create", names=names, provider=provider, **kwargs
-    )
+    info = client.extra_action(action='volume_create', names=names, provider=provider, **kwargs)
     return info
-
 
 def volume_attach(provider, names, **kwargs):
     """
@@ -345,11 +291,8 @@ def volume_attach(provider, names, **kwargs):
 
     """
     client = _get_client()
-    info = client.extra_action(
-        provider=provider, names=names, action="volume_attach", **kwargs
-    )
+    info = client.extra_action(provider=provider, names=names, action='volume_attach', **kwargs)
     return info
-
 
 def volume_detach(provider, names, **kwargs):
     """
@@ -363,11 +306,8 @@ def volume_detach(provider, names, **kwargs):
 
     """
     client = _get_client()
-    info = client.extra_action(
-        provider=provider, names=names, action="volume_detach", **kwargs
-    )
+    info = client.extra_action(provider=provider, names=names, action='volume_detach', **kwargs)
     return info
-
 
 def network_list(provider):
     """
@@ -381,8 +321,7 @@ def network_list(provider):
 
     """
     client = _get_client()
-    return client.extra_action(action="network_list", provider=provider, names="names")
-
+    return client.extra_action(action='network_list', provider=provider, names='names')
 
 def network_create(provider, names, **kwargs):
     """
@@ -396,10 +335,7 @@ def network_create(provider, names, **kwargs):
 
     """
     client = _get_client()
-    return client.extra_action(
-        provider=provider, names=names, action="network_create", **kwargs
-    )
-
+    return client.extra_action(provider=provider, names=names, action='network_create', **kwargs)
 
 def virtual_interface_list(provider, names, **kwargs):
     """
@@ -413,10 +349,7 @@ def virtual_interface_list(provider, names, **kwargs):
 
     """
     client = _get_client()
-    return client.extra_action(
-        provider=provider, names=names, action="virtual_interface_list", **kwargs
-    )
-
+    return client.extra_action(provider=provider, names=names, action='virtual_interface_list', **kwargs)
 
 def virtual_interface_create(provider, names, **kwargs):
     """
@@ -430,6 +363,4 @@ def virtual_interface_create(provider, names, **kwargs):
 
     """
     client = _get_client()
-    return client.extra_action(
-        provider=provider, names=names, action="virtual_interface_create", **kwargs
-    )
+    return client.extra_action(provider=provider, names=names, action='virtual_interface_create', **kwargs)

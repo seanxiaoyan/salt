@@ -435,17 +435,12 @@ are a couple examples:
           - 8.8.8.8
           - 8.8.4.4
 """
-
 import difflib
 import logging
-
 import salt.loader
 import salt.utils.network
 import salt.utils.platform
-
-# Set up logging
 log = logging.getLogger(__name__)
-
 
 def __virtual__():
     """
@@ -453,373 +448,266 @@ def __virtual__():
     module available.
     """
     if salt.utils.platform.is_windows():
-        return (False, "Only supported on non-Windows OSs")
-    if "ip.get_interface" in __salt__:
+        return (False, 'Only supported on non-Windows OSs')
+    if 'ip.get_interface' in __salt__:
         return True
-    return (False, "ip module could not be loaded")
-
+    return (False, 'ip module could not be loaded')
 
 def managed(name, enabled=True, **kwargs):
-    """
-    Ensure that the named interface is configured properly.
-
-    name
-        The name of the interface to manage
-
-    type : eth
-        Type of interface and configuration
-
-        .. versionchanged:: 3002
-
-    enabled
-        Designates the state of this interface.
-    """
-    # For this function we are purposefully overwriting a bif
-    # to enhance the user experience. This does not look like
-    # it will cause a problem. Just giving a heads up in case
-    # it does create a problem.
-    ret = {
-        "name": name,
-        "changes": {},
-        "result": True,
-        "comment": "Interface {} is up to date.".format(name),
-    }
-    if "test" not in kwargs:
-        kwargs["test"] = __opts__.get("test", False)
-
-    # set ranged status
+    log.info('Trace')
+    '\n    Ensure that the named interface is configured properly.\n\n    name\n        The name of the interface to manage\n\n    type : eth\n        Type of interface and configuration\n\n        .. versionchanged:: 3002\n\n    enabled\n        Designates the state of this interface.\n    '
+    ret = {'name': name, 'changes': {}, 'result': True, 'comment': 'Interface {} is up to date.'.format(name)}
+    if 'test' not in kwargs:
+        kwargs['test'] = __opts__.get('test', False)
     apply_ranged_setting = False
-
-    # Pull interface type out of kwargs
-    iface_type = str(kwargs.pop("type", "eth"))
-
-    if "addr" in kwargs:
-        hwaddr = kwargs.pop("addr")
+    iface_type = str(kwargs.pop('type', 'eth'))
+    if 'addr' in kwargs:
+        hwaddr = kwargs.pop('addr')
         msg = "'addr' is not a valid argument name, "
-        if "hwaddr" not in kwargs:
+        if 'hwaddr' not in kwargs:
             msg += "its value has been assigned to 'hwaddr' instead."
-            kwargs["hwaddr"] = hwaddr
+            kwargs['hwaddr'] = hwaddr
         else:
             msg += "it has been ignored in favor of 'hwaddr'."
-        msg += " Update your SLS file to get rid of this warning."
-        ret.setdefault("warnings", []).append(msg)
-
-    # Build interface
+        msg += ' Update your SLS file to get rid of this warning.'
+        ret.setdefault('warnings', []).append(msg)
     try:
-        old = __salt__["ip.get_interface"](name)
-        new = __salt__["ip.build_interface"](name, iface_type, enabled, **kwargs)
-        if kwargs["test"]:
+        log.info('Trace')
+        old = __salt__['ip.get_interface'](name)
+        new = __salt__['ip.build_interface'](name, iface_type, enabled, **kwargs)
+        if kwargs['test']:
             if old == new:
                 pass
             if not old and new:
-                ret["result"] = None
-                ret["comment"] = "Interface {} is set to be added.".format(name)
+                ret['result'] = None
+                ret['comment'] = 'Interface {} is set to be added.'.format(name)
             elif old != new:
-                diff = difflib.unified_diff(old, new, lineterm="")
-                ret["result"] = None
-                ret["comment"] = "Interface {} is set to be updated:\n{}".format(
-                    name, "\n".join(diff)
-                )
-        else:
-            if not old and new:
-                ret["comment"] = "Interface {} added.".format(name)
-                ret["changes"]["interface"] = "Added network interface."
-                apply_ranged_setting = True
-            elif old != new:
-                diff = difflib.unified_diff(old, new, lineterm="")
-                ret["comment"] = "Interface {} updated.".format(name)
-                ret["changes"]["interface"] = "\n".join(diff)
-                apply_ranged_setting = True
+                diff = difflib.unified_diff(old, new, lineterm='')
+                ret['result'] = None
+                ret['comment'] = 'Interface {} is set to be updated:\n{}'.format(name, '\n'.join(diff))
+        elif not old and new:
+            ret['comment'] = 'Interface {} added.'.format(name)
+            ret['changes']['interface'] = 'Added network interface.'
+            apply_ranged_setting = True
+        elif old != new:
+            diff = difflib.unified_diff(old, new, lineterm='')
+            ret['comment'] = 'Interface {} updated.'.format(name)
+            ret['changes']['interface'] = '\n'.join(diff)
+            apply_ranged_setting = True
     except AttributeError as error:
-        ret["result"] = False
-        ret["comment"] = str(error)
+        log.info('Trace')
+        ret['result'] = False
+        ret['comment'] = str(error)
         return ret
-
-    # Debian based system can have a type of source
-    # in the interfaces file, we don't ifup or ifdown it
-    if iface_type == "source":
+    if iface_type == 'source':
         return ret
-
-    # Setup up bond modprobe script if required
-    if iface_type == "bond" and "ip.get_bond" in __salt__:
+    if iface_type == 'bond' and 'ip.get_bond' in __salt__:
         try:
-            old = __salt__["ip.get_bond"](name)
-            new = __salt__["ip.build_bond"](name, **kwargs)
-            if kwargs["test"]:
+            log.info('Trace')
+            old = __salt__['ip.get_bond'](name)
+            new = __salt__['ip.build_bond'](name, **kwargs)
+            if kwargs['test']:
                 if not old and new:
-                    ret["result"] = None
-                    ret["comment"] = "Bond interface {} is set to be added.".format(
-                        name
-                    )
+                    ret['result'] = None
+                    ret['comment'] = 'Bond interface {} is set to be added.'.format(name)
                 elif old != new:
-                    diff = difflib.unified_diff(old, new, lineterm="")
-                    ret["result"] = None
-                    ret[
-                        "comment"
-                    ] = "Bond interface {} is set to be updated:\n{}".format(
-                        name, "\n".join(diff)
-                    )
-            else:
-                if not old and new:
-                    ret["comment"] = "Bond interface {} added.".format(name)
-                    ret["changes"]["bond"] = "Added bond {}.".format(name)
-                    apply_ranged_setting = True
-                elif old != new:
-                    diff = difflib.unified_diff(old, new, lineterm="")
-                    ret["comment"] = "Bond interface {} updated.".format(name)
-                    ret["changes"]["bond"] = "\n".join(diff)
-                    apply_ranged_setting = True
+                    diff = difflib.unified_diff(old, new, lineterm='')
+                    ret['result'] = None
+                    ret['comment'] = 'Bond interface {} is set to be updated:\n{}'.format(name, '\n'.join(diff))
+            elif not old and new:
+                ret['comment'] = 'Bond interface {} added.'.format(name)
+                ret['changes']['bond'] = 'Added bond {}.'.format(name)
+                apply_ranged_setting = True
+            elif old != new:
+                diff = difflib.unified_diff(old, new, lineterm='')
+                ret['comment'] = 'Bond interface {} updated.'.format(name)
+                ret['changes']['bond'] = '\n'.join(diff)
+                apply_ranged_setting = True
         except AttributeError as error:
-            # TODO Add a way of reversing the interface changes.
-            ret["result"] = False
-            ret["comment"] = str(error)
+            log.info('Trace')
+            ret['result'] = False
+            ret['comment'] = str(error)
             return ret
-
-    if kwargs["test"]:
+    if kwargs['test']:
         return ret
-
-    # For Redhat/Centos ranged network
-    if "range" in name:
+    if 'range' in name:
         if apply_ranged_setting:
             try:
-                ret["result"] = __salt__["service.restart"]("network")
-                ret["comment"] = "network restarted for change of ranged interfaces"
+                log.info('Trace')
+                ret['result'] = __salt__['service.restart']('network')
+                ret['comment'] = 'network restarted for change of ranged interfaces'
                 return ret
-            except Exception as error:  # pylint: disable=broad-except
-                ret["result"] = False
-                ret["comment"] = str(error)
+            except Exception as error:
+                log.info('Trace')
+                ret['result'] = False
+                ret['comment'] = str(error)
                 return ret
-        ret["result"] = True
-        ret["comment"] = "no change, passing it"
+        ret['result'] = True
+        ret['comment'] = 'no change, passing it'
         return ret
-
-    # Bring up/shutdown interface
     try:
-        # Get Interface current status
+        log.info('Trace')
         interfaces = salt.utils.network.interfaces()
         interface_status = False
         if name in interfaces:
-            interface_status = interfaces[name].get("up")
+            interface_status = interfaces[name].get('up')
         else:
             for iface in interfaces:
-                if "secondary" in interfaces[iface]:
-                    for second in interfaces[iface]["secondary"]:
-                        if second.get("label", "") == name:
+                if 'secondary' in interfaces[iface]:
+                    for second in interfaces[iface]['secondary']:
+                        if second.get('label', '') == name:
                             interface_status = True
-                if iface == "lo":
-                    if "inet" in interfaces[iface]:
-                        inet_data = interfaces[iface]["inet"]
+                if iface == 'lo':
+                    if 'inet' in interfaces[iface]:
+                        inet_data = interfaces[iface]['inet']
                         if len(inet_data) > 1:
                             for data in inet_data:
-                                if data.get("label", "") == name:
+                                if data.get('label', '') == name:
                                     interface_status = True
-                    if "inet6" in interfaces[iface]:
-                        inet6_data = interfaces[iface]["inet6"]
+                    if 'inet6' in interfaces[iface]:
+                        inet6_data = interfaces[iface]['inet6']
                         if len(inet6_data) > 1:
                             for data in inet6_data:
-                                if data.get("label", "") == name:
+                                if data.get('label', '') == name:
                                     interface_status = True
         if enabled:
-            if "noifupdown" not in kwargs:
+            if 'noifupdown' not in kwargs:
                 if interface_status:
-                    if ret["changes"]:
-                        # Interface should restart to validate if it's up
-                        __salt__["ip.down"](name, iface_type)
-                        __salt__["ip.up"](name, iface_type)
-                        ret["changes"][
-                            "status"
-                        ] = "Interface {} restart to validate".format(name)
+                    if ret['changes']:
+                        __salt__['ip.down'](name, iface_type)
+                        __salt__['ip.up'](name, iface_type)
+                        ret['changes']['status'] = 'Interface {} restart to validate'.format(name)
                 else:
-                    __salt__["ip.up"](name, iface_type)
-                    ret["changes"]["status"] = "Interface {} is up".format(name)
-        else:
-            if "noifupdown" not in kwargs:
-                if interface_status:
-                    __salt__["ip.down"](name, iface_type)
-                    ret["changes"]["status"] = "Interface {} down".format(name)
-    except Exception as error:  # pylint: disable=broad-except
-        ret["result"] = False
-        ret["comment"] = str(error)
+                    __salt__['ip.up'](name, iface_type)
+                    ret['changes']['status'] = 'Interface {} is up'.format(name)
+        elif 'noifupdown' not in kwargs:
+            if interface_status:
+                __salt__['ip.down'](name, iface_type)
+                ret['changes']['status'] = 'Interface {} down'.format(name)
+    except Exception as error:
+        log.info('Trace')
+        ret['result'] = False
+        ret['comment'] = str(error)
         return ret
-
-    # Try to enslave bonding interfaces after master was created
-    if iface_type == "bond" and "noifupdown" not in kwargs:
-
-        if "slaves" in kwargs and kwargs["slaves"]:
-            # Check that there are new slaves for this master
-            present_slaves = __salt__["cmd.run"](
-                ["cat", "/sys/class/net/{}/bonding/slaves".format(name)]
-            ).split()
-            if isinstance(kwargs["slaves"], list):
-                desired_slaves = kwargs["slaves"]
+    if iface_type == 'bond' and 'noifupdown' not in kwargs:
+        if 'slaves' in kwargs and kwargs['slaves']:
+            present_slaves = __salt__['cmd.run'](['cat', '/sys/class/net/{}/bonding/slaves'.format(name)]).split()
+            if isinstance(kwargs['slaves'], list):
+                desired_slaves = kwargs['slaves']
             else:
-                desired_slaves = kwargs["slaves"].split()
+                desired_slaves = kwargs['slaves'].split()
             missing_slaves = set(desired_slaves) - set(present_slaves)
-
-            # Enslave only slaves missing in master
             if missing_slaves:
-                if __grains__["os_family"] != "Suse":
-                    ifenslave_path = __salt__["cmd.run"](["which", "ifenslave"]).strip()
+                if __grains__['os_family'] != 'Suse':
+                    ifenslave_path = __salt__['cmd.run'](['which', 'ifenslave']).strip()
                     if ifenslave_path:
-                        log.info(
-                            "Adding slaves '%s' to the master %s",
-                            " ".join(missing_slaves),
-                            name,
-                        )
+                        log.info("Adding slaves '%s' to the master %s", ' '.join(missing_slaves), name)
                         cmd = [ifenslave_path, name] + list(missing_slaves)
-                        __salt__["cmd.run"](cmd, python_shell=False)
+                        __salt__['cmd.run'](cmd, python_shell=False)
                     else:
                         log.error("Command 'ifenslave' not found")
-                    ret["changes"][
-                        "enslave"
-                    ] = "Added slaves '{}' to master '{}'".format(
-                        " ".join(missing_slaves), name
-                    )
+                    ret['changes']['enslave'] = "Added slaves '{}' to master '{}'".format(' '.join(missing_slaves), name)
             else:
-                log.info(
-                    "All slaves '%s' are already added to the master %s"
-                    ", no actions required",
-                    " ".join(missing_slaves),
-                    name,
-                )
-
+                log.info("All slaves '%s' are already added to the master %s, no actions required", ' '.join(missing_slaves), name)
     if enabled and interface_status:
-        # Interface was restarted, return
         return ret
-
-    # Make sure that the network grains reflect any changes made here
-    __salt__["saltutil.refresh_grains"]()
+    __salt__['saltutil.refresh_grains']()
     return ret
-
 
 def routes(name, **kwargs):
-    """
-    Manage network interface static routes.
-
-    name
-        Interface name to apply the route to.
-
-    kwargs
-        Named routes
-    """
-    ret = {
-        "name": name,
-        "changes": {},
-        "result": True,
-        "comment": "Interface {} routes are up to date.".format(name),
-    }
+    log.info('Trace')
+    '\n    Manage network interface static routes.\n\n    name\n        Interface name to apply the route to.\n\n    kwargs\n        Named routes\n    '
+    ret = {'name': name, 'changes': {}, 'result': True, 'comment': 'Interface {} routes are up to date.'.format(name)}
     apply_routes = False
-    if "test" not in kwargs:
-        kwargs["test"] = __opts__.get("test", False)
-
-    # Build interface routes
+    if 'test' not in kwargs:
+        kwargs['test'] = __opts__.get('test', False)
     try:
-        old = __salt__["ip.get_routes"](name)
-        new = __salt__["ip.build_routes"](name, **kwargs)
-        if kwargs["test"]:
+        log.info('Trace')
+        old = __salt__['ip.get_routes'](name)
+        new = __salt__['ip.build_routes'](name, **kwargs)
+        if kwargs['test']:
             if old == new:
                 return ret
             if not old and new:
-                ret["result"] = None
-                ret["comment"] = "Interface {} routes are set to be added.".format(name)
+                ret['result'] = None
+                ret['comment'] = 'Interface {} routes are set to be added.'.format(name)
                 return ret
             elif old != new:
-                diff = difflib.unified_diff(old, new, lineterm="")
-                ret["result"] = None
-                ret[
-                    "comment"
-                ] = "Interface {} routes are set to be updated:\n{}".format(
-                    name, "\n".join(diff)
-                )
+                diff = difflib.unified_diff(old, new, lineterm='')
+                ret['result'] = None
+                ret['comment'] = 'Interface {} routes are set to be updated:\n{}'.format(name, '\n'.join(diff))
                 return ret
         if not old and new:
             apply_routes = True
-            ret["comment"] = "Interface {} routes added.".format(name)
-            ret["changes"]["network_routes"] = "Added interface {} routes.".format(name)
+            ret['comment'] = 'Interface {} routes added.'.format(name)
+            ret['changes']['network_routes'] = 'Added interface {} routes.'.format(name)
         elif old != new:
-            diff = difflib.unified_diff(old, new, lineterm="")
+            diff = difflib.unified_diff(old, new, lineterm='')
             apply_routes = True
-            ret["comment"] = "Interface {} routes updated.".format(name)
-            ret["changes"]["network_routes"] = "\n".join(diff)
+            ret['comment'] = 'Interface {} routes updated.'.format(name)
+            ret['changes']['network_routes'] = '\n'.join(diff)
     except AttributeError as error:
-        ret["result"] = False
-        ret["comment"] = str(error)
+        log.info('Trace')
+        ret['result'] = False
+        ret['comment'] = str(error)
         return ret
-
-    # Apply interface routes
     if apply_routes:
         try:
-            __salt__["ip.apply_network_settings"](**kwargs)
+            log.info('Trace')
+            __salt__['ip.apply_network_settings'](**kwargs)
         except AttributeError as error:
-            ret["result"] = False
-            ret["comment"] = str(error)
+            log.info('Trace')
+            ret['result'] = False
+            ret['comment'] = str(error)
             return ret
-
     return ret
 
-
 def system(name, **kwargs):
-    """
-    Ensure that global network settings are configured properly.
-
-    name
-        Custom name to represent this configuration change.
-
-    kwargs
-        The global parameters for the system.
-
-    """
-    ret = {
-        "name": name,
-        "changes": {},
-        "result": True,
-        "comment": "Global network settings are up to date.",
-    }
+    log.info('Trace')
+    '\n    Ensure that global network settings are configured properly.\n\n    name\n        Custom name to represent this configuration change.\n\n    kwargs\n        The global parameters for the system.\n\n    '
+    ret = {'name': name, 'changes': {}, 'result': True, 'comment': 'Global network settings are up to date.'}
     apply_net_settings = False
-    kwargs["test"] = __opts__["test"]
-    # Build global network settings
+    kwargs['test'] = __opts__['test']
     try:
-        old = __salt__["ip.get_network_settings"]()
-        new = __salt__["ip.build_network_settings"](**kwargs)
-        if __opts__["test"]:
+        log.info('Trace')
+        old = __salt__['ip.get_network_settings']()
+        new = __salt__['ip.build_network_settings'](**kwargs)
+        if __opts__['test']:
             if old == new:
                 return ret
             if not old and new:
-                ret["result"] = None
-                ret["comment"] = "Global network settings are set to be added."
+                ret['result'] = None
+                ret['comment'] = 'Global network settings are set to be added.'
                 return ret
             elif old != new:
-                diff = difflib.unified_diff(old, new, lineterm="")
-                ret["result"] = None
-                ret[
-                    "comment"
-                ] = "Global network settings are set to be updated:\n{}".format(
-                    "\n".join(diff)
-                )
+                diff = difflib.unified_diff(old, new, lineterm='')
+                ret['result'] = None
+                ret['comment'] = 'Global network settings are set to be updated:\n{}'.format('\n'.join(diff))
                 return ret
         if not old and new:
             apply_net_settings = True
-            ret["changes"]["network_settings"] = "Added global network settings."
+            ret['changes']['network_settings'] = 'Added global network settings.'
         elif old != new:
-            diff = difflib.unified_diff(old, new, lineterm="")
+            diff = difflib.unified_diff(old, new, lineterm='')
             apply_net_settings = True
-            ret["changes"]["network_settings"] = "\n".join(diff)
+            ret['changes']['network_settings'] = '\n'.join(diff)
     except AttributeError as error:
-        ret["result"] = False
-        ret["comment"] = str(error)
+        log.info('Trace')
+        ret['result'] = False
+        ret['comment'] = str(error)
         return ret
     except KeyError as error:
-        ret["result"] = False
-        ret["comment"] = str(error)
+        log.info('Trace')
+        ret['result'] = False
+        ret['comment'] = str(error)
         return ret
-
-    # Apply global network settings
     if apply_net_settings:
         try:
-            __salt__["ip.apply_network_settings"](**kwargs)
+            log.info('Trace')
+            __salt__['ip.apply_network_settings'](**kwargs)
         except AttributeError as error:
-            ret["result"] = False
-            ret["comment"] = str(error)
+            log.info('Trace')
+            ret['result'] = False
+            ret['comment'] = str(error)
             return ret
-
     return ret

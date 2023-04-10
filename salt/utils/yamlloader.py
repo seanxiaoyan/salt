@@ -1,21 +1,15 @@
 """
 Custom YAML loading in Salt
 """
-
-
 import salt.utils.stringutils
-import yaml  # pylint: disable=blacklisted-import
+import yaml
 from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode, SequenceNode
+import logging
+log = logging.getLogger(__name__)
+BaseLoader = getattr(yaml, 'CSafeLoader', yaml.SafeLoader)
+__all__ = ['SaltYamlSafeLoader', 'load', 'safe_load']
 
-# prefer C bindings over python when available
-BaseLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
-
-
-__all__ = ["SaltYamlSafeLoader", "load", "safe_load"]
-
-
-# with code integrated from https://gist.github.com/844388
 class SaltYamlSafeLoader(BaseLoader):
     """
     Create a custom YAML loader that uses the custom constructor. This allows
@@ -26,16 +20,11 @@ class SaltYamlSafeLoader(BaseLoader):
     def __init__(self, stream, dictclass=dict):
         super().__init__(stream)
         if dictclass is not dict:
-            # then assume ordered dict and use it for both !map and !omap
-            self.add_constructor("tag:yaml.org,2002:map", type(self).construct_yaml_map)
-            self.add_constructor(
-                "tag:yaml.org,2002:omap", type(self).construct_yaml_map
-            )
-        self.add_constructor("tag:yaml.org,2002:str", type(self).construct_yaml_str)
-        self.add_constructor(
-            "tag:yaml.org,2002:python/unicode", type(self).construct_unicode
-        )
-        self.add_constructor("tag:yaml.org,2002:timestamp", type(self).construct_scalar)
+            self.add_constructor('tag:yaml.org,2002:map', type(self).construct_yaml_map)
+            self.add_constructor('tag:yaml.org,2002:omap', type(self).construct_yaml_map)
+        self.add_constructor('tag:yaml.org,2002:str', type(self).construct_yaml_str)
+        self.add_constructor('tag:yaml.org,2002:python/unicode', type(self).construct_unicode)
+        self.add_constructor('tag:yaml.org,2002:timestamp', type(self).construct_scalar)
         self.dictclass = dictclass
 
     def construct_yaml_map(self, node):
@@ -48,40 +37,24 @@ class SaltYamlSafeLoader(BaseLoader):
         return node.value
 
     def construct_mapping(self, node, deep=False):
-        """
-        Build the mapping for YAML
-        """
+        log.info('Trace')
+        '\n        Build the mapping for YAML\n        '
         if not isinstance(node, MappingNode):
-            raise ConstructorError(
-                None,
-                None,
-                "expected a mapping node, but found {}".format(node.id),
-                node.start_mark,
-            )
-
+            raise ConstructorError(None, None, 'expected a mapping node, but found {}'.format(node.id), node.start_mark)
         self.flatten_mapping(node)
-
-        context = "while constructing a mapping"
+        context = 'while constructing a mapping'
         mapping = self.dictclass()
-        for key_node, value_node in node.value:
+        for (key_node, value_node) in node.value:
             key = self.construct_object(key_node, deep=deep)
             try:
+                log.info('Trace')
                 hash(key)
             except TypeError:
-                raise ConstructorError(
-                    context,
-                    node.start_mark,
-                    "found unacceptable key {}".format(key_node.value),
-                    key_node.start_mark,
-                )
+                log.info('Trace')
+                raise ConstructorError(context, node.start_mark, 'found unacceptable key {}'.format(key_node.value), key_node.start_mark)
             value = self.construct_object(value_node, deep=deep)
             if key in mapping:
-                raise ConstructorError(
-                    context,
-                    node.start_mark,
-                    "found conflicting ID '{}'".format(key),
-                    key_node.start_mark,
-                )
+                raise ConstructorError(context, node.start_mark, "found conflicting ID '{}'".format(key), key_node.start_mark)
             mapping[key] = value
         return mapping
 
@@ -90,15 +63,13 @@ class SaltYamlSafeLoader(BaseLoader):
         Verify integers and pass them in correctly is they are declared
         as octal
         """
-        if node.tag == "tag:yaml.org,2002:int":
-            if node.value == "0":
+        if node.tag == 'tag:yaml.org,2002:int':
+            if node.value == '0':
                 pass
-            elif node.value.startswith("0") and not node.value.startswith(("0b", "0x")):
-                node.value = node.value.lstrip("0")
-                # If value was all zeros, node.value would have been reduced to
-                # an empty string. Change it to '0'.
-                if node.value == "":
-                    node.value = "0"
+            elif node.value.startswith('0') and (not node.value.startswith(('0b', '0x'))):
+                node.value = node.value.lstrip('0')
+                if node.value == '':
+                    node.value = '0'
         return super().construct_scalar(node)
 
     def construct_yaml_str(self, node):
@@ -109,9 +80,8 @@ class SaltYamlSafeLoader(BaseLoader):
         merge = []
         index = 0
         while index < len(node.value):
-            key_node, value_node = node.value[index]
-
-            if key_node.tag == "tag:yaml.org,2002:merge":
+            (key_node, value_node) = node.value[index]
+            if key_node.tag == 'tag:yaml.org,2002:merge':
                 del node.value[index]
                 if isinstance(value_node, MappingNode):
                     self.flatten_mapping(value_node)
@@ -120,43 +90,27 @@ class SaltYamlSafeLoader(BaseLoader):
                     submerge = []
                     for subnode in value_node.value:
                         if not isinstance(subnode, MappingNode):
-                            raise ConstructorError(
-                                "while constructing a mapping",
-                                node.start_mark,
-                                "expected a mapping for merging, but found {}".format(
-                                    subnode.id
-                                ),
-                                subnode.start_mark,
-                            )
+                            raise ConstructorError('while constructing a mapping', node.start_mark, 'expected a mapping for merging, but found {}'.format(subnode.id), subnode.start_mark)
                         self.flatten_mapping(subnode)
                         submerge.append(subnode.value)
                     submerge.reverse()
                     for value in submerge:
                         merge.extend(value)
                 else:
-                    raise ConstructorError(
-                        "while constructing a mapping",
-                        node.start_mark,
-                        "expected a mapping or list of mappings for merging, but"
-                        " found {}".format(value_node.id),
-                        value_node.start_mark,
-                    )
-            elif key_node.tag == "tag:yaml.org,2002:value":
-                key_node.tag = "tag:yaml.org,2002:str"
+                    raise ConstructorError('while constructing a mapping', node.start_mark, 'expected a mapping or list of mappings for merging, but found {}'.format(value_node.id), value_node.start_mark)
+            elif key_node.tag == 'tag:yaml.org,2002:value':
+                key_node.tag = 'tag:yaml.org,2002:str'
                 index += 1
             else:
                 index += 1
         if merge:
-            # Here we need to discard any duplicate entries based on key_node
-            existing_nodes = [name_node.value for name_node, value_node in node.value]
+            existing_nodes = [name_node.value for (name_node, value_node) in node.value]
             mergeable_items = [x for x in merge if x[0].value not in existing_nodes]
-
             node.value = mergeable_items + node.value
 
-
 def load(stream, Loader=SaltYamlSafeLoader):
+    log.info('Trace')
     return yaml.load(stream, Loader=Loader)
-
 
 def safe_load(stream, Loader=SaltYamlSafeLoader):
     """

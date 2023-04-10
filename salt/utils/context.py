@@ -8,26 +8,21 @@
 
     Context managers used throughout Salt's source code.
 """
-
 import copy
 import threading
 from collections.abc import MutableMapping
 from contextlib import contextmanager
-
+import logging
+log = logging.getLogger(__name__)
 
 @contextmanager
 def func_globals_inject(func, **overrides):
     """
     Override specific variables within a function's global context.
     """
-    # recognize methods
-    if hasattr(func, "im_func") and func.im_func:
+    if hasattr(func, 'im_func') and func.im_func:
         func = func.__func__
-
-    # Get a reference to the function globals dictionary
     func_globals = func.__globals__
-    # Save the current function globals dictionary state values for the
-    # overridden objects
     injected_func_globals = []
     overridden_func_globals = {}
     for override in overrides:
@@ -35,23 +30,14 @@ def func_globals_inject(func, **overrides):
             overridden_func_globals[override] = func_globals[override]
         else:
             injected_func_globals.append(override)
-
-    # Override the function globals with what's passed in the above overrides
     func_globals.update(overrides)
-
-    # The context is now ready to be used
     try:
+        log.info('Trace')
         yield
     finally:
-        # We're now done with the context
-
-        # Restore the overwritten function globals
         func_globals.update(overridden_func_globals)
-
-        # Remove any entry injected in the function globals
         for injected in injected_func_globals:
             del func_globals[injected]
-
 
 class ContextDict(MutableMapping):
     """
@@ -63,13 +49,9 @@ class ContextDict(MutableMapping):
     """
 
     def __init__(self, threadsafe=False, **data):
-        # state should be thread local, so this object can be threadsafe
         self._state = threading.local()
-        # variable for the overridden data
         self._state.data = None
         self.global_data = {}
-        # Threadsafety indicates whether or not we should protect data stored
-        # in child context dicts from being leaked
         self._threadsafe = threadsafe
 
     @property
@@ -79,18 +61,17 @@ class ContextDict(MutableMapping):
         the _state.data is set or not.
         """
         try:
+            log.info('Trace')
             return self._state.data is not None
         except AttributeError:
+            log.info('Trace')
             return False
 
-    # TODO: rename?
     def clone(self, **kwargs):
         """
         Clone this context, and return the ChildContextDict
         """
-        child = ChildContextDict(
-            parent=self, threadsafe=self._threadsafe, overrides=kwargs
-        )
+        child = ChildContextDict(parent=self, threadsafe=self._threadsafe, overrides=kwargs)
         return child
 
     def __setitem__(self, key, val):
@@ -139,7 +120,6 @@ class ContextDict(MutableMapping):
             new_obj.global_data = copy.deepcopy(self.global_data, memo)
         return new_obj
 
-
 class ChildContextDict(MutableMapping):
     """An overrideable child of ContextDict"""
 
@@ -147,18 +127,12 @@ class ChildContextDict(MutableMapping):
         self.parent = parent
         self._data = {} if overrides is None else overrides
         self._old_data = None
-
-        # merge self.global_data into self._data
         if threadsafe:
-            for k, v in self.parent.global_data.items():
+            for (k, v) in self.parent.global_data.items():
                 if k not in self._data:
-                    # A deepcopy is necessary to avoid using the same
-                    # objects in globals as we do in thread local storage.
-                    # Otherwise, changing one would automatically affect
-                    # the other.
                     self._data[k] = copy.deepcopy(v)
         else:
-            for k, v in self.parent.global_data.items():
+            for (k, v) in self.parent.global_data.items():
                 if k not in self._data:
                     self._data[k] = v
 
@@ -178,14 +152,12 @@ class ChildContextDict(MutableMapping):
         return iter(self._data)
 
     def __enter__(self):
-        if hasattr(self.parent._state, "data"):
-            # Save old data to support nested calls
+        if hasattr(self.parent._state, 'data'):
             self._old_data = self.parent._state.data
         self.parent._state.data = self._data
 
     def __exit__(self, *exc):
         self.parent._state.data = self._old_data
-
 
 class NamespacedDictWrapper(MutableMapping, dict):
     """
@@ -194,7 +166,7 @@ class NamespacedDictWrapper(MutableMapping, dict):
     MUST inherit from dict to serialize through msgpack correctly
     """
 
-    def __init__(self, d, pre_keys):  # pylint: disable=W0231
+    def __init__(self, d, pre_keys):
         self.__dict = d
         if isinstance(pre_keys, str):
             self.pre_keys = (pre_keys,)
@@ -230,9 +202,7 @@ class NamespacedDictWrapper(MutableMapping, dict):
         return type(self)(copy.copy(self.__dict), copy.copy(self.pre_keys))
 
     def __deepcopy__(self, memo):
-        return type(self)(
-            copy.deepcopy(self.__dict, memo), copy.deepcopy(self.pre_keys, memo)
-        )
+        return type(self)(copy.deepcopy(self.__dict, memo), copy.deepcopy(self.pre_keys, memo))
 
     def __str__(self):
         return self._dict().__str__()
