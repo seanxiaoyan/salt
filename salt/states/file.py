@@ -1323,6 +1323,9 @@ def _makedirs(
             path=name, user=user, group=group, mode=dir_mode
         )
 
+def _move_existing_to_backup(src, dst):
+    # preserve the same pre-cleanup behavior already present above this call
+    return __salt__["file.move"](src, dst)
 
 def hardlink(
     name,
@@ -1820,18 +1823,18 @@ def symlink(
                 else:
                     __salt__["file.remove"](backupname)
             try:
-                __salt__["file.move"](name, backupname)
+                _move_existing_to_backup(name, backupname)
             except Exception as exc:  # pylint: disable=broad-except
                 ret["changes"] = {}
                 log.debug(
-                    "Encountered error renaming %s to %s",
+                    "Failed to move '%s' to backup '%s': %s",
                     name,
                     backupname,
-                    exc_info=True,
+                    exc,
                 )
                 return _error(
                     ret,
-                    "Unable to rename {} to backup {} -> : {}".format(
+                    "Unable to move {} to backup {} -> : {}".format(
                         name, backupname, exc
                     ),
                 )
